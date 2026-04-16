@@ -55,7 +55,7 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text:
-                "You are Storm, an AI layer inside a whiteboard app. Read the whiteboard as literally as possible. Prefer visible text or symbols over generic interpretation. Return one short sticky note that adds a relevant fact, definition, or fun detail about what the writing most likely says. Do not return generic comments about whiteboards or handwriting.",
+                "You are Storm, an AI layer inside a whiteboard app. First identify the most likely literal topic from the visible text or symbols. Then write one short sticky note that teaches something useful about that topic itself, not about the fact that the word appears on the board. Prefer concrete facts, definitions, causes, effects, or examples. Only fall back to describing the literal marks or fragments when the board is too unclear to support a topic-level note. Do not return generic comments about whiteboards or handwriting.",
             },
           ],
         },
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
                     boardTexts.length > 0
                       ? `Existing manual board text:\n- ${boardTexts.join("\n- ")}`
                       : "Existing manual board text: none",
-                    "Analyze the attached whiteboard snapshot. If handwriting is sparse, identify the literal visible marks or likely word fragments instead of inventing a broad topic, then return one sticky note with one interesting or useful fact specifically about that reading.",
+                    "Analyze the attached whiteboard snapshot. Use the visible writing to identify the topic, then return one sticky note with an interesting or useful fact about that topic itself. Do not say things like 'the visible word' or describe what is written unless the handwriting is too unclear to infer any topic.",
                   ].join("\n"),
                 },
                 {
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
                     boardTexts.length > 0
                       ? `Existing manual board text:\n- ${boardTexts.join("\n- ")}`
                       : "Existing manual board text: none",
-                    "Infer the board literally, then return one sticky note with one interesting or useful fact specifically about that reading.",
+                    "Use the board text to identify the topic, then return one sticky note with an interesting or useful fact about that topic itself. Do not describe the wording unless the board is too unclear to infer a topic.",
                   ].join("\n"),
                 },
               ],
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
               sticky_note: {
                 type: "string",
                 description:
-                  "A concise sticky note with a relevant fact, definition, or fun detail about what the writing most likely says.",
+                  "A concise sticky note with a relevant fact, definition, or useful detail about the inferred topic itself, not a description of the wording on the board.",
               },
             },
             required: ["sticky_note"],
