@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Next.js GitHub Pages Starter",
-  description: "A static Next.js site configured for GitHub Pages.",
+  title: "WriteSpace Whiteboard",
+  description: "A clean browser whiteboard for drawing, saving notes, and exporting boards.",
 };
 
 export default function RootLayout({

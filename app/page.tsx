@@ -1,31 +1,704 @@
+"use client";
+
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+
+type DrawMode = "draw" | "erase";
+
+type Point = {
+  x: number;
+  y: number;
+};
+
+type Stroke = {
+  id: string;
+  color: string;
+  size: number;
+  mode: DrawMode;
+  points: Point[];
+};
+
+type Note = {
+  id: string;
+  title: string;
+  strokes: Stroke[];
+  updatedAt: string;
+};
+
+const STORAGE_KEY = "writespace.notes.v1";
+const CANVAS_BACKGROUND = "#ffffff";
+const PALETTE = ["#182536", "#2f6fed", "#0f9d7a", "#f29f05", "#d95d39"];
+const DEFAULT_COLOR = PALETTE[0];
+const DEFAULT_SIZE = 8;
+
+function createId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function createEmptyNote(index: number) {
+  return {
+    id: createId(),
+    title: `Note ${index}`,
+    strokes: [],
+    updatedAt: nowIso(),
+  } satisfies Note;
+}
+
+function normalizeNote(value: Partial<Note>, index: number): Note {
+  const title =
+    typeof value.title === "string" ? value.title : `Note ${index + 1}`;
+
+  return {
+    id: typeof value.id === "string" ? value.id : createId(),
+    title,
+    strokes: Array.isArray(value.strokes)
+      ? value.strokes.map((stroke) => ({
+          id: typeof stroke.id === "string" ? stroke.id : createId(),
+          color: typeof stroke.color === "string" ? stroke.color : DEFAULT_COLOR,
+          size: typeof stroke.size === "number" ? stroke.size : DEFAULT_SIZE,
+          mode: stroke.mode === "erase" ? "erase" : "draw",
+          points: Array.isArray(stroke.points)
+            ? stroke.points.filter(
+                (point): point is Point =>
+                  typeof point?.x === "number" && typeof point?.y === "number",
+              )
+            : [],
+        }))
+      : [],
+    updatedAt:
+      typeof value.updatedAt === "string" ? value.updatedAt : nowIso(),
+  };
+}
+
+function getStrokeColor(stroke: Stroke) {
+  return stroke.mode === "erase" ? CANVAS_BACKGROUND : stroke.color;
+}
+
+function applyBrushStyle(
+  context: CanvasRenderingContext2D,
+  stroke: Pick<Stroke, "color" | "mode" | "size">,
+) {
+  const color = getStrokeColor(stroke as Stroke);
+
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = stroke.size;
+}
+
+function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke) {
+  if (stroke.points.length === 0) {
+    return;
+  }
+
+  applyBrushStyle(context, stroke);
+
+  if (stroke.points.length === 1) {
+    const [point] = stroke.points;
+    context.beginPath();
+    context.arc(point.x, point.y, stroke.size / 2, 0, Math.PI * 2);
+    context.fill();
+    return;
+  }
+
+  context.beginPath();
+  stroke.points.forEach((point, index) => {
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+      return;
+    }
+
+    context.lineTo(point.x, point.y);
+  });
+  context.stroke();
+}
+
+function paintCanvas(canvas: HTMLCanvasElement, strokes: Stroke[]) {
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return;
+  }
+
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = CANVAS_BACKGROUND;
+  context.fillRect(0, 0, width, height);
+
+  strokes.forEach((stroke) => {
+    drawStroke(context, stroke);
+  });
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function formatUpdatedAt(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Just now";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export default function Home() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const activeStrokeRef = useRef<Stroke | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [activeNoteId, setActiveNoteId] = useState("");
+  const [brushColor, setBrushColor] = useState(DEFAULT_COLOR);
+  const [brushSize, setBrushSize] = useState(DEFAULT_SIZE);
+  const [mode, setMode] = useState<DrawMode>("draw");
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  const activeNote = notes.find((note) => note.id === activeNoteId) ?? null;
+  const orderedNotes = [...notes].sort(
+    (left, right) =>
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  );
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!stored) {
+      const firstNote = createEmptyNote(1);
+      setNotes([firstNote]);
+      setActiveNoteId(firstNote.id);
+      setIsHydrated(true);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as {
+        notes?: Partial<Note>[];
+        activeNoteId?: string;
+      };
+      const normalizedNotes = Array.isArray(parsed.notes)
+        ? parsed.notes.map(normalizeNote)
+        : [];
+
+      if (normalizedNotes.length === 0) {
+        const firstNote = createEmptyNote(1);
+        setNotes([firstNote]);
+        setActiveNoteId(firstNote.id);
+      } else {
+        const savedActiveId =
+          typeof parsed.activeNoteId === "string" ? parsed.activeNoteId : "";
+        const nextActiveId = normalizedNotes.some(
+          (note) => note.id === savedActiveId,
+        )
+          ? savedActiveId
+          : normalizedNotes[0].id;
+
+        setNotes(normalizedNotes);
+        setActiveNoteId(nextActiveId);
+      }
+    } catch {
+      const firstNote = createEmptyNote(1);
+      setNotes([firstNote]);
+      setActiveNoteId(firstNote.id);
+    }
+
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ notes, activeNoteId }),
+    );
+  }, [activeNoteId, isHydrated, notes]);
+
+  useEffect(() => {
+    if (!isHydrated || notes.length === 0) {
+      return;
+    }
+
+    if (!notes.some((note) => note.id === activeNoteId)) {
+      setActiveNoteId(notes[0].id);
+    }
+  }, [activeNoteId, isHydrated, notes]);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    const canvas = canvasRef.current;
+
+    if (!board || !canvas) {
+      return;
+    }
+
+    const resizeCanvas = () => {
+      const bounds = board.getBoundingClientRect();
+
+      if (bounds.width === 0 || bounds.height === 0) {
+        return;
+      }
+
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(bounds.width * ratio);
+      canvas.height = Math.floor(bounds.height * ratio);
+      canvas.style.width = `${bounds.width}px`;
+      canvas.style.height = `${bounds.height}px`;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        return;
+      }
+
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      paintCanvas(canvas, activeNote?.strokes ?? []);
+    };
+
+    resizeCanvas();
+
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(board);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeNote?.strokes]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    paintCanvas(canvas, activeNote?.strokes ?? []);
+  }, [activeNote]);
+
+  function updateActiveNote(
+    updater: (note: Note) => Note,
+    fallbackTitle = notes.length + 1,
+  ) {
+    if (!activeNote) {
+      const nextNote = createEmptyNote(fallbackTitle);
+      const updated = updater(nextNote);
+      setNotes([updated]);
+      setActiveNoteId(updated.id);
+      return;
+    }
+
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id === activeNote.id ? updater(note) : note,
+      ),
+    );
+  }
+
+  function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextTitle = event.target.value;
+
+    updateActiveNote((note) => ({
+      ...note,
+      title: nextTitle,
+      updatedAt: nowIso(),
+    }));
+  }
+
+  function handleNewNote() {
+    const nextNote = createEmptyNote(notes.length + 1);
+    setNotes([nextNote, ...notes]);
+    setActiveNoteId(nextNote.id);
+  }
+
+  function handleSaveSnapshot() {
+    if (!activeNote) {
+      return;
+    }
+
+    const snapshotTitle = activeNote.title.trim().length > 0
+      ? `${activeNote.title} copy`
+      : "Saved copy";
+    const snapshot: Note = {
+      ...activeNote,
+      id: createId(),
+      title: snapshotTitle,
+      strokes: activeNote.strokes.map((stroke) => ({
+        ...stroke,
+        points: stroke.points.map((point) => ({ ...point })),
+      })),
+      updatedAt: nowIso(),
+    };
+
+    setNotes([snapshot, ...notes]);
+    setActiveNoteId(snapshot.id);
+  }
+
+  function handleDeleteNote(noteId: string) {
+    const remainingNotes = notes.filter((note) => note.id !== noteId);
+
+    if (remainingNotes.length === 0) {
+      const replacement = createEmptyNote(1);
+      setNotes([replacement]);
+      setActiveNoteId(replacement.id);
+      return;
+    }
+
+    setNotes(remainingNotes);
+
+    if (noteId === activeNoteId) {
+      setActiveNoteId(remainingNotes[0].id);
+    }
+  }
+
+  function handleUndo() {
+    if (!activeNote || activeNote.strokes.length === 0) {
+      return;
+    }
+
+    updateActiveNote((note) => ({
+      ...note,
+      strokes: note.strokes.slice(0, -1),
+      updatedAt: nowIso(),
+    }));
+  }
+
+  function handleClearCanvas() {
+    if (!activeNote || activeNote.strokes.length === 0) {
+      return;
+    }
+
+    updateActiveNote((note) => ({
+      ...note,
+      strokes: [],
+      updatedAt: nowIso(),
+    }));
+  }
+
+  function handleExportPng() {
+    if (!activeNote) {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const link = document.createElement("a");
+    const filename = slugify(activeNote.title.trim() || "writespace-note");
+
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${filename}.png`;
+    link.click();
+  }
+
+  function getCanvasPoint(
+    event: ReactPointerEvent<HTMLCanvasElement>,
+  ): Point | null {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return null;
+    }
+
+    const bounds = canvas.getBoundingClientRect();
+
+    return {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    };
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!activeNote) {
+      return;
+    }
+
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const point = getCanvasPoint(event);
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (!point || !context) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const nextStroke: Stroke = {
+      id: createId(),
+      color: brushColor,
+      size: brushSize,
+      mode,
+      points: [point],
+    };
+
+    activeStrokeRef.current = nextStroke;
+    drawStroke(context, nextStroke);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const activeStroke = activeStrokeRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    const point = getCanvasPoint(event);
+
+    if (!activeStroke || !context || !point) {
+      return;
+    }
+
+    const previousPoint = activeStroke.points[activeStroke.points.length - 1];
+    activeStroke.points.push(point);
+
+    applyBrushStyle(context, activeStroke);
+    context.beginPath();
+    context.moveTo(previousPoint.x, previousPoint.y);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+  }
+
+  function commitStroke() {
+    const activeStroke = activeStrokeRef.current;
+
+    if (!activeStroke) {
+      return;
+    }
+
+    activeStrokeRef.current = null;
+
+    updateActiveNote((note) => ({
+      ...note,
+      strokes: [
+        ...note.strokes,
+        {
+          ...activeStroke,
+          points: activeStroke.points.map((point) => ({ ...point })),
+        },
+      ],
+      updatedAt: nowIso(),
+    }));
+  }
+
+  function releaseStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    commitStroke();
+  }
+
+  const activeTitle = activeNote
+    ? activeNote.title.trim() || "Untitled note"
+    : "Loading note";
+  const activeUpdatedAt = activeNote ? formatUpdatedAt(activeNote.updatedAt) : "";
+  const strokeCount = activeNote?.strokes.length ?? 0;
+
   return (
-    <main className="page">
-      <section className="card">
-        <p className="eyebrow">Next.js on GitHub Pages</p>
-        <h1>Static export is ready.</h1>
-        <p className="lead">
-          This app builds to plain files in <code>out/</code> so GitHub Pages
-          can host it directly.
-        </p>
-        <div className="actions">
-          <a
-            href="https://nextjs.org/docs/app/building-your-application/deploying/static-exports"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Static export docs
-          </a>
-          <a
-            href="https://pages.github.com/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub Pages docs
-          </a>
+    <main className="app-shell">
+      <aside className="panel sidebar">
+        <div className="brand-block">
+          <p className="eyebrow">WriteSpace</p>
+          <h1>Whiteboard notes that stay with you.</h1>
+          <p className="intro">
+            Sketch ideas, annotate diagrams, and keep every board stored in this
+            browser. Export a PNG whenever you need a file.
+          </p>
+        </div>
+
+        <div className="field-block">
+          <label className="field-label" htmlFor="note-title">
+            Current note
+          </label>
+          <input
+            id="note-title"
+            className="title-input"
+            type="text"
+            value={activeNote?.title ?? ""}
+            onChange={handleTitleChange}
+            placeholder="Name this note"
+          />
+          <p className="field-help">
+            Autosaves locally. Use <strong>Save snapshot</strong> to keep a
+            version before changing the board.
+          </p>
+        </div>
+
+        <div className="sidebar-actions">
+          <button className="primary-button" onClick={handleNewNote}>
+            New note
+          </button>
+          <button className="secondary-button" onClick={handleSaveSnapshot}>
+            Save snapshot
+          </button>
+        </div>
+
+        <div className="notes-head">
+          <span>Saved notes</span>
+          <span>{notes.length}</span>
+        </div>
+
+        <div className="note-list">
+          {orderedNotes.map((note) => {
+            const isActive = note.id === activeNoteId;
+
+            return (
+              <div
+                className={`note-card${isActive ? " note-card-active" : ""}`}
+                key={note.id}
+              >
+                <button
+                  className="note-open"
+                  onClick={() => setActiveNoteId(note.id)}
+                >
+                  <span className="note-title">
+                    {note.title.trim() || "Untitled note"}
+                  </span>
+                  <span className="note-meta">
+                    {note.strokes.length} strokes · {formatUpdatedAt(note.updatedAt)}
+                  </span>
+                </button>
+                <button
+                  className="note-delete"
+                  aria-label={`Delete ${note.title.trim() || "Untitled note"}`}
+                  onClick={() => handleDeleteNote(note.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      <section className="workspace">
+        <header className="panel toolbar">
+          <div className="toolbar-cluster">
+            <span className="toolbar-label">Tool</span>
+            <div className="segmented-control">
+              <button
+                className={mode === "draw" ? "segment-active" : ""}
+                onClick={() => setMode("draw")}
+              >
+                Pen
+              </button>
+              <button
+                className={mode === "erase" ? "segment-active" : ""}
+                onClick={() => setMode("erase")}
+              >
+                Eraser
+              </button>
+            </div>
+          </div>
+
+          <div className="toolbar-cluster">
+            <span className="toolbar-label">Color</span>
+            <div className="swatches">
+              {PALETTE.map((color) => (
+                <button
+                  key={color}
+                  className={`swatch${brushColor === color ? " swatch-active" : ""}`}
+                  onClick={() => {
+                    setBrushColor(color);
+                    setMode("draw");
+                  }}
+                  style={{ "--swatch-color": color } as CSSProperties}
+                  aria-label={`Select ${color} brush`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="toolbar-cluster brush-cluster">
+            <label className="toolbar-label" htmlFor="brush-size">
+              Brush
+            </label>
+            <input
+              id="brush-size"
+              className="brush-slider"
+              min={2}
+              max={28}
+              step={1}
+              type="range"
+              value={brushSize}
+              onChange={(event) => setBrushSize(Number(event.target.value))}
+            />
+            <span className="brush-size">{brushSize}px</span>
+          </div>
+
+          <div className="toolbar-actions">
+            <button className="ghost-button" onClick={handleUndo}>
+              Undo
+            </button>
+            <button className="ghost-button" onClick={handleClearCanvas}>
+              Clear
+            </button>
+            <button className="primary-button" onClick={handleExportPng}>
+              Export PNG
+            </button>
+          </div>
+        </header>
+
+        <div className="panel board-panel">
+          <div className="board-header">
+            <div>
+              <p className="eyebrow">Whiteboard</p>
+              <h2>{activeTitle}</h2>
+            </div>
+            <div className="board-status">
+              <span>{strokeCount} strokes</span>
+              <span>{activeUpdatedAt}</span>
+            </div>
+          </div>
+
+          <div className="board-surface" ref={boardRef}>
+            <canvas
+              ref={canvasRef}
+              className="board-canvas"
+              onPointerCancel={releaseStroke}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={releaseStroke}
+            />
+            <div className="board-hint">
+              Draw with mouse, touch, or pen. Notes stay saved in this browser
+              after refresh.
+            </div>
+          </div>
         </div>
       </section>
     </main>
   );
 }
-

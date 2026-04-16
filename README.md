@@ -1,7 +1,15 @@
-# Next.js GitHub Pages starter
+# WriteSpace Whiteboard
 
-This repository is configured to build a static Next.js site and deploy it to
-GitHub Pages with GitHub Actions.
+A static Next.js whiteboard for quick sketch notes on GitHub Pages.
+
+## Features
+
+- Freehand drawing with pen and eraser tools
+- Adjustable brush size and color palette
+- Multiple saved notes stored in browser `localStorage`
+- Snapshot copies for versioning a board before edits
+- PNG export for sharing or archiving a board
+- Static export configured for GitHub Pages under `/writespace/`
 
 ## Local development
 
@@ -10,15 +18,11 @@ npm install
 npm run dev
 ```
 
-## Deployment
+## Production export
 
-1. Push this repository to GitHub.
-2. In the repository settings, enable GitHub Pages and set the source to
-   **GitHub Actions**.
-3. Push to the `main` branch to trigger deployment.
+```bash
+npm run build
+```
 
-The Next.js config derives the correct base path automatically on GitHub
-Actions:
-
-- `https://username.github.io/` repos deploy without a base path
-- project repos deploy under `/<repo-name>/`
+The repository already includes a GitHub Actions workflow that publishes the
+static `out/` export to GitHub Pages when `main` is pushed.
