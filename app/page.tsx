@@ -63,7 +63,7 @@ function nowIso() {
 function createEmptyNote(index: number) {
   return {
     id: createId(),
-    title: `Note ${index}`,
+    title: `Board ${index}`,
     strokes: [],
     cards: [],
     updatedAt: nowIso(),
@@ -72,7 +72,7 @@ function createEmptyNote(index: number) {
 
 function normalizeNote(value: Partial<Note>, index: number): Note {
   const title =
-    typeof value.title === "string" ? value.title : `Note ${index + 1}`;
+    typeof value.title === "string" ? value.title : `Board ${index + 1}`;
 
   return {
     id: typeof value.id === "string" ? value.id : createId(),
@@ -217,14 +217,15 @@ function buildCardTexts(value: string) {
 
 function buildStormContext(note: Note) {
   const title = note.title.trim();
-  const manualCards = note.cards
+  const boardTexts = note.cards
+    .filter((card) => card.source === "manual")
     .map((card) => card.text.trim())
     .filter((text) => text.length > 0);
 
   return {
     title,
-    manualCards,
-    canAnalyze: title.length > 0 || manualCards.length > 0,
+    boardTexts,
+    canAnalyze: title.length > 0 || boardTexts.length > 0,
   };
 }
 
@@ -523,7 +524,7 @@ export default function Home() {
 
   async function handleStorm() {
     if (!activeNote) {
-      setAiError("Open a note before using Storm.");
+      setAiError("Open a board before using Storm.");
       return;
     }
 
@@ -536,7 +537,7 @@ export default function Home() {
     }
 
     if (!context.canAnalyze) {
-      setAiError("Name the note or pin some board text so Storm has context.");
+      setAiError("Name the board or add text cards so Storm has context.");
       return;
     }
 
@@ -558,17 +559,17 @@ export default function Home() {
             {
               role: "system",
               content:
-                "You are Storm, an AI layer inside a whiteboard app. Infer the topic from the note context and provide concise, relevant information the user would want on a whiteboard. Respond with short bullet sections titled Topic read, Relevant information, Key questions, and Useful next steps.",
+                "You are Storm, an AI layer inside a whiteboard app. Infer the topic from the board context and provide concise, relevant information the user would want on a whiteboard. Respond with short bullet sections titled Topic read, Relevant information, Key questions, and Useful next steps.",
             },
             {
               role: "user",
               content: [
                 `Note title: ${context.title || "(untitled)"}`,
-                context.manualCards.length > 0
-                  ? `Board text:\n- ${context.manualCards.join("\n- ")}`
+                context.boardTexts.length > 0
+                  ? `Board text:\n- ${context.boardTexts.join("\n- ")}`
                   : "Board text: none",
                 `Stroke count: ${activeNote.strokes.length}`,
-                "Interpret what this whiteboard is about and add useful context.",
+                "Interpret what this whiteboard is about and brainstorm useful context the user should see on the board.",
               ].join("\n"),
             },
           ],
@@ -593,6 +594,7 @@ export default function Home() {
       }
 
       setAiResponse(content);
+      addCardsToActiveNote(buildCardTexts(content), "ai");
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : "The AI request failed.",
@@ -600,10 +602,6 @@ export default function Home() {
     } finally {
       setIsAiLoading(false);
     }
-  }
-
-  function handlePinAiResponse() {
-    addCardsToActiveNote(buildCardTexts(aiResponse), "ai");
   }
 
   function getCanvasPoint(
@@ -705,8 +703,8 @@ export default function Home() {
   }
 
   const activeTitle = activeNote
-    ? activeNote.title.trim() || "Untitled note"
-    : "Loading note";
+    ? activeNote.title.trim() || "Untitled board"
+    : "Loading board";
   const activeUpdatedAt = activeNote ? formatUpdatedAt(activeNote.updatedAt) : "";
   const strokeCount = activeNote?.strokes.length ?? 0;
 
@@ -720,6 +718,16 @@ export default function Home() {
         </header>
 
         <header className="panel toolbar">
+          <div className="toolbar-cluster">
+            <button
+              className="primary-button"
+              onClick={handleStorm}
+              disabled={isAiLoading}
+            >
+              {isAiLoading ? "Storming..." : "Storm"}
+            </button>
+          </div>
+
           <div className="toolbar-cluster">
             <span className="toolbar-label">Tool</span>
             <div className="segmented-control">
@@ -834,14 +842,9 @@ export default function Home() {
       </section>
 
       <aside className="panel bottom-dock">
-        <div className="brand-block">
-          <p className="eyebrow">Workspace</p>
-          <h3>Notes</h3>
-        </div>
-
         <div className="field-block">
           <label className="field-label" htmlFor="note-title">
-            Current note
+            Current board
           </label>
           <input
             id="note-title"
@@ -849,18 +852,18 @@ export default function Home() {
             type="text"
             value={activeNote?.title ?? ""}
             onChange={handleTitleChange}
-            placeholder="Name this note"
+            placeholder="Name this board"
           />
         </div>
 
         <div className="sidebar-actions">
           <button className="primary-button" onClick={handleNewNote}>
-            New note
+            New board
           </button>
         </div>
 
         <div className="notes-head">
-          <span>Saved notes</span>
+          <span>Saved boards</span>
           <span>{notes.length}</span>
         </div>
 
@@ -878,7 +881,7 @@ export default function Home() {
                   onClick={() => setActiveNoteId(note.id)}
                 >
                   <span className="note-title">
-                    {note.title.trim() || "Untitled note"}
+                    {note.title.trim() || "Untitled board"}
                   </span>
                   <span className="note-meta">
                     {note.strokes.length} strokes · {formatUpdatedAt(note.updatedAt)}
@@ -886,7 +889,7 @@ export default function Home() {
                 </button>
                 <button
                   className="note-delete"
-                  aria-label={`Delete ${note.title.trim() || "Untitled note"}`}
+                  aria-label={`Delete ${note.title.trim() || "Untitled board"}`}
                   onClick={() => handleDeleteNote(note.id)}
                 >
                   Delete
@@ -897,14 +900,9 @@ export default function Home() {
         </div>
 
         <section className="ai-panel">
-          <div className="ai-panel-head">
-            <p className="eyebrow">Storm</p>
-            <h3>Context reader</h3>
-          </div>
-
           <div className="field-block">
             <label className="field-label" htmlFor="ai-api-key">
-              API key
+              Storm API key
             </label>
             <input
               id="ai-api-key"
@@ -917,20 +915,10 @@ export default function Home() {
           </div>
 
           <div className="ai-actions">
-            <button
-              className="primary-button"
-              onClick={handleStorm}
-              disabled={isAiLoading}
-            >
-              {isAiLoading ? "Reading..." : "Storm"}
-            </button>
-            <button
-              className="ghost-button"
-              onClick={handlePinAiResponse}
-              disabled={aiResponse.trim().length === 0}
-            >
-              Pin storm notes
-            </button>
+            <span className="storm-helper">
+              Storm reads the board title and text cards, then drops brainstorm
+              notes onto the board automatically.
+            </span>
           </div>
 
           {aiError ? <p className="ai-error">{aiError}</p> : null}
@@ -939,12 +927,12 @@ export default function Home() {
             <p className="field-label">Response</p>
             <pre>
               {aiResponse ||
-                "Storm reads the note title and any pinned board text, then returns relevant information."}
+                "Press Storm at the top to interpret the current board and add brainstorm notes."}
             </pre>
           </div>
 
           <p className="ai-footnote">
-            Storm uses the current note as context. The API key stays in local
+            Storm uses the current board as context. The API key stays in local
             browser storage so it does not get published in the GitHub Pages
             bundle.
           </p>
