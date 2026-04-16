@@ -41,12 +41,10 @@ type Note = {
 };
 
 const STORAGE_KEY = "writespace.notes.v1";
-const AI_KEY_STORAGE = "writespace.openai.key.v1";
 const CANVAS_BACKGROUND = "#ffffff";
 const PALETTE = ["#182536", "#2f6fed", "#0f9d7a", "#f29f05", "#d95d39"];
 const DEFAULT_COLOR = PALETTE[0];
 const DEFAULT_SIZE = 8;
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -276,7 +274,6 @@ export default function Home() {
   const [brushSize, setBrushSize] = useState(DEFAULT_SIZE);
   const [mode, setMode] = useState<DrawMode>("draw");
   const [isHydrated, setIsHydrated] = useState(false);
-  const [aiApiKey, setAiApiKey] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -289,11 +286,6 @@ export default function Home() {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    const savedAiKey = window.localStorage.getItem(AI_KEY_STORAGE);
-
-    if (typeof savedAiKey === "string") {
-      setAiApiKey(savedAiKey);
-    }
 
     if (!stored) {
       const firstNote = createEmptyNote(1);
@@ -347,14 +339,6 @@ export default function Home() {
       JSON.stringify({ notes, activeNoteId }),
     );
   }, [activeNoteId, isHydrated, notes]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    window.localStorage.setItem(AI_KEY_STORAGE, aiApiKey.trim());
-  }, [aiApiKey, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated || notes.length === 0) {
@@ -729,14 +713,8 @@ export default function Home() {
       return;
     }
 
-    const trimmedKey = aiApiKey.trim();
     const context = buildStormContext(activeNote);
     const snapshot = buildStormSnapshot(activeNote);
-
-    if (trimmedKey.length === 0) {
-      setAiError("Add an OpenAI API key to use Storm.");
-      return;
-    }
 
     if (!snapshot && !context.canAnalyze) {
       setAiError("Add some board content before using Storm.");
@@ -747,106 +725,33 @@ export default function Home() {
     setAiError("");
 
     try {
-      const response = await fetch(OPENAI_RESPONSES_URL, {
+      const response = await fetch("/api/storm", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${trimmedKey}`,
         },
         body: JSON.stringify({
-          model: "gpt-4.1-nano",
-          max_output_tokens: 220,
-          input: [
-            {
-              role: "system",
-              content: [
-                {
-                  type: "input_text",
-                  text:
-                    "You are Storm, an AI layer inside a whiteboard app. Read the whiteboard as literally as possible. Prefer visible text or symbols over generic interpretation. Return one short sticky note that adds a relevant fact, definition, or fun detail about what the writing most likely says. Do not return generic comments about whiteboards or handwriting.",
-                },
-              ],
-            },
-            {
-              role: "user",
-              content: snapshot
-                ? [
-                  {
-                      type: "input_text",
-                      text: [
-                        `Board title: ${context.title || "(untitled)"}`,
-                        context.boardTexts.length > 0
-                          ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
-                          : "Existing manual board text: none",
-                        "Analyze the attached whiteboard snapshot. If handwriting is sparse, identify the literal visible marks or likely word fragments instead of inventing a broad topic, then return one sticky note with one interesting or useful fact specifically about that reading.",
-                      ].join("\n"),
-                  },
-                  {
-                    type: "input_image",
-                    image_url: snapshot,
-                  },
-                  ]
-                : [
-                    {
-                      type: "input_text",
-                      text: [
-                        `Board title: ${context.title || "(untitled)"}`,
-                        context.boardTexts.length > 0
-                          ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
-                          : "Existing manual board text: none",
-                        "Infer the board literally, then return one sticky note with one interesting or useful fact specifically about that reading.",
-                      ].join("\n"),
-                    },
-                  ],
-            },
-          ],
-          text: {
-            format: {
-              type: "json_schema",
-              name: "storm_sticky_notes",
-              strict: true,
-              schema: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  sticky_note: {
-                    type: "string",
-                    description:
-                      "A concise sticky note with a relevant fact, definition, or fun detail about what the writing most likely says.",
-                  },
-                },
-                required: ["sticky_note"],
-              },
-            },
-          },
+          boardTitle: context.title,
+          boardTexts: context.boardTexts,
+          snapshot,
         }),
       });
 
       const payload = (await response.json()) as {
         error?: { message?: string };
-        output_text?: string;
-        output?: Array<{
-          content?: Array<{
-            type?: string;
-            text?: string;
-          }>;
-        }>;
+        content?: string;
       };
 
       if (!response.ok) {
         throw new Error(
-          payload.error?.message ?? "The AI request failed. Try again.",
+          payload.error?.message ??
+            (typeof payload.error === "string"
+              ? payload.error
+              : "The AI request failed. Try again."),
         );
       }
 
-      const content = (
-        payload.output_text ??
-        payload.output
-          ?.flatMap((item) => item.content ?? [])
-          .find((item) => item.type === "output_text" && typeof item.text === "string")
-          ?.text ??
-        ""
-      ).trim();
+      const content = (payload.content ?? "").trim();
 
       if (!content) {
         throw new Error("The AI response was empty.");
@@ -1170,25 +1075,10 @@ export default function Home() {
         </div>
 
         <section className="ai-panel">
-          <div className="field-block">
-            <label className="field-label" htmlFor="ai-api-key">
-              OpenAI API key
-            </label>
-            <input
-              id="ai-api-key"
-              className="title-input"
-              type="password"
-              value={aiApiKey}
-              onChange={(event) => setAiApiKey(event.target.value)}
-              placeholder="Stored only in this browser"
-            />
-          </div>
-
           <div className="ai-actions">
             <span className="storm-helper">
-              Storm uses OpenAI `gpt-4.1-nano`, the lowest-cost image-capable
-              model I could verify, and drops two brainstorm notes onto the
-              board automatically.
+              Storm runs on the Vercel deployment using the server-side
+              `OPENAI_API_KEY` and adds one new sticky note each time.
             </span>
           </div>
 
@@ -1203,9 +1093,8 @@ export default function Home() {
           </div>
 
           <p className="ai-footnote">
-            Storm uses the current board as context. The API key stays in local
-            browser storage so it does not get published in the GitHub Pages
-            bundle.
+            Storm uses the current board as context and the API key stays on the
+            server.
           </p>
         </section>
       </aside>
