@@ -339,29 +339,6 @@ export default function Home() {
     setActiveNoteId(nextNote.id);
   }
 
-  function handleSaveSnapshot() {
-    if (!activeNote) {
-      return;
-    }
-
-    const snapshotTitle = activeNote.title.trim().length > 0
-      ? `${activeNote.title} copy`
-      : "Saved copy";
-    const snapshot: Note = {
-      ...activeNote,
-      id: createId(),
-      title: snapshotTitle,
-      strokes: activeNote.strokes.map((stroke) => ({
-        ...stroke,
-        points: stroke.points.map((point) => ({ ...point })),
-      })),
-      updatedAt: nowIso(),
-    };
-
-    setNotes([snapshot, ...notes]);
-    setActiveNoteId(snapshot.id);
-  }
-
   function handleDeleteNote(noteId: string) {
     const remainingNotes = notes.filter((note) => note.id !== noteId);
 
@@ -528,82 +505,18 @@ export default function Home() {
 
   return (
     <main className="app-shell">
-      <aside className="panel sidebar">
-        <div className="brand-block">
-          <p className="eyebrow">WriteSpace</p>
-          <h1>Whiteboard notes that stay with you.</h1>
-          <p className="intro">
-            Sketch ideas, annotate diagrams, and keep every board stored in this
-            browser. Export a PNG whenever you need a file.
-          </p>
-        </div>
-
-        <div className="field-block">
-          <label className="field-label" htmlFor="note-title">
-            Current note
-          </label>
-          <input
-            id="note-title"
-            className="title-input"
-            type="text"
-            value={activeNote?.title ?? ""}
-            onChange={handleTitleChange}
-            placeholder="Name this note"
-          />
-          <p className="field-help">
-            Autosaves locally. Use <strong>Save snapshot</strong> to keep a
-            version before changing the board.
-          </p>
-        </div>
-
-        <div className="sidebar-actions">
-          <button className="primary-button" onClick={handleNewNote}>
-            New note
-          </button>
-          <button className="secondary-button" onClick={handleSaveSnapshot}>
-            Save snapshot
-          </button>
-        </div>
-
-        <div className="notes-head">
-          <span>Saved notes</span>
-          <span>{notes.length}</span>
-        </div>
-
-        <div className="note-list">
-          {orderedNotes.map((note) => {
-            const isActive = note.id === activeNoteId;
-
-            return (
-              <div
-                className={`note-card${isActive ? " note-card-active" : ""}`}
-                key={note.id}
-              >
-                <button
-                  className="note-open"
-                  onClick={() => setActiveNoteId(note.id)}
-                >
-                  <span className="note-title">
-                    {note.title.trim() || "Untitled note"}
-                  </span>
-                  <span className="note-meta">
-                    {note.strokes.length} strokes · {formatUpdatedAt(note.updatedAt)}
-                  </span>
-                </button>
-                <button
-                  className="note-delete"
-                  aria-label={`Delete ${note.title.trim() || "Untitled note"}`}
-                  onClick={() => handleDeleteNote(note.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-
       <section className="workspace">
+        <header className="panel hero-panel">
+          <div className="brand-block">
+            <p className="eyebrow">WriteSpace</p>
+            <h1>WriteSpace</h1>
+            <p className="intro">
+              Sketch ideas, annotate diagrams, and keep every board ready for a
+              quick export.
+            </p>
+          </div>
+        </header>
+
         <header className="panel toolbar">
           <div className="toolbar-cluster">
             <span className="toolbar-label">Tool</span>
@@ -693,12 +606,76 @@ export default function Home() {
               onPointerUp={releaseStroke}
             />
             <div className="board-hint">
-              Draw with mouse, touch, or pen. Notes stay saved in this browser
-              after refresh.
+              Draw with mouse, touch, or pen. Export the board any time as a
+              PNG.
             </div>
           </div>
         </div>
       </section>
+
+      <aside className="panel bottom-dock">
+        <div className="brand-block">
+          <p className="eyebrow">Workspace</p>
+          <h3>Notes</h3>
+        </div>
+
+        <div className="field-block">
+          <label className="field-label" htmlFor="note-title">
+            Current note
+          </label>
+          <input
+            id="note-title"
+            className="title-input"
+            type="text"
+            value={activeNote?.title ?? ""}
+            onChange={handleTitleChange}
+            placeholder="Name this note"
+          />
+        </div>
+
+        <div className="sidebar-actions">
+          <button className="primary-button" onClick={handleNewNote}>
+            New note
+          </button>
+        </div>
+
+        <div className="notes-head">
+          <span>Saved notes</span>
+          <span>{notes.length}</span>
+        </div>
+
+        <div className="note-list">
+          {orderedNotes.map((note) => {
+            const isActive = note.id === activeNoteId;
+
+            return (
+              <div
+                className={`note-card${isActive ? " note-card-active" : ""}`}
+                key={note.id}
+              >
+                <button
+                  className="note-open"
+                  onClick={() => setActiveNoteId(note.id)}
+                >
+                  <span className="note-title">
+                    {note.title.trim() || "Untitled note"}
+                  </span>
+                  <span className="note-meta">
+                    {note.strokes.length} strokes · {formatUpdatedAt(note.updatedAt)}
+                  </span>
+                </button>
+                <button
+                  className="note-delete"
+                  aria-label={`Delete ${note.title.trim() || "Untitled note"}`}
+                  onClick={() => handleDeleteNote(note.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
     </main>
   );
 }
