@@ -1074,29 +1074,7 @@ export default function Home() {
           })}
         </div>
 
-        <section className="ai-panel">
-          <div className="ai-actions">
-            <span className="storm-helper">
-              Storm runs on the Vercel deployment using the server-side
-              `OPENAI_API_KEY` and adds one new sticky note each time.
-            </span>
-          </div>
-
-          {aiError ? <p className="ai-error">{aiError}</p> : null}
-
-          <div className="ai-response">
-            <p className="field-label">Response</p>
-            <pre>
-              {aiResponse ||
-                "Press Storm at the top to interpret the current board and add brainstorm notes."}
-            </pre>
-          </div>
-
-          <p className="ai-footnote">
-            Storm uses the current board as context and the API key stays on the
-            server.
-          </p>
-        </section>
+        {aiError ? <p className="ai-error">{aiError}</p> : null}
       </aside>
     </main>
   );
