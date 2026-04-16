@@ -432,14 +432,20 @@ button {
   background: rgba(255, 251, 214, 0.94);
   box-shadow: 0 20px 35px rgba(24, 37, 54, 0.14);
   pointer-events: auto;
+  cursor: grab;
+  user-select: none;
 }
 
 .idea-card-ai {
-  background: rgba(226, 239, 255, 0.96);
+  background: rgba(255, 244, 153, 0.96);
 }
 
 .idea-card-manual {
   background: rgba(255, 247, 210, 0.96);
+}
+
+.idea-card:active {
+  cursor: grabbing;
 }
 
 .idea-card p {

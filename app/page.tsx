@@ -41,12 +41,12 @@ type Note = {
 };
 
 const STORAGE_KEY = "writespace.notes.v1";
-const AI_KEY_STORAGE = "writespace.deepseek.key.v1";
+const AI_KEY_STORAGE = "writespace.openai.key.v1";
 const CANVAS_BACKGROUND = "#ffffff";
 const PALETTE = ["#182536", "#2f6fed", "#0f9d7a", "#f29f05", "#d95d39"];
 const DEFAULT_COLOR = PALETTE[0];
 const DEFAULT_SIZE = 8;
-const DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -173,6 +173,21 @@ function paintCanvas(canvas: HTMLCanvasElement, strokes: Stroke[]) {
   });
 }
 
+function paintStrokes(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  strokes: Stroke[],
+) {
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = CANVAS_BACKGROUND;
+  context.fillRect(0, 0, width, height);
+
+  strokes.forEach((stroke) => {
+    drawStroke(context, stroke);
+  });
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -215,6 +230,22 @@ function buildCardTexts(value: string) {
     .map((line) => (line.length > 180 ? `${line.slice(0, 177)}...` : line));
 }
 
+function buildStormCardsFromJson(value: string) {
+  try {
+    const parsed = JSON.parse(value) as {
+      sticky_notes?: Array<{ text?: string }>;
+    };
+    const notes = Array.isArray(parsed.sticky_notes) ? parsed.sticky_notes : [];
+
+    return notes
+      .slice(0, 2)
+      .map((note) => compactIdeaText(note.text ?? ""))
+      .filter((text) => text.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 function buildStormContext(note: Note) {
   const title = note.title.trim();
   const boardTexts = note.cards
@@ -233,6 +264,12 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const activeStrokeRef = useRef<Stroke | null>(null);
+  const dragRef = useRef<{
+    cardId: string;
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState("");
   const [brushColor, setBrushColor] = useState(DEFAULT_COLOR);
@@ -450,6 +487,31 @@ export default function Home() {
     });
   }
 
+  function replaceAiCards(texts: string[]) {
+    const cleanedTexts = texts.map(compactIdeaText).filter((text) => text.length > 0);
+
+    if (cleanedTexts.length === 0) {
+      return;
+    }
+
+    updateActiveNote((note) => {
+      const preservedCards = note.cards.filter((card) => card.source !== "ai");
+      const nextCards = cleanedTexts.slice(0, 2).map((text, index) => ({
+        id: createId(),
+        text,
+        x: 28 + index * 250,
+        y: 28,
+        source: "ai",
+      })) as BoardCard[];
+
+      return {
+        ...note,
+        cards: [...preservedCards, ...nextCards],
+        updatedAt: nowIso(),
+      };
+    });
+  }
+
   function handleDeleteNote(noteId: string) {
     const remainingNotes = notes.filter((note) => note.id !== noteId);
 
@@ -522,6 +584,139 @@ export default function Home() {
     }));
   }
 
+  function buildStormSnapshot(note: Note) {
+    const board = boardRef.current;
+
+    if (!board) {
+      return null;
+    }
+
+    const width = Math.max(800, Math.floor(board.clientWidth));
+    const height = Math.max(480, Math.floor(board.clientHeight));
+    const canvas = document.createElement("canvas");
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return null;
+    }
+
+    paintStrokes(context, width, height, note.strokes);
+
+    note.cards
+      .filter((card) => card.source === "manual")
+      .forEach((card) => {
+        context.fillStyle = "rgba(255, 247, 210, 0.96)";
+        context.strokeStyle = "rgba(24, 37, 54, 0.1)";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.roundRect(card.x, card.y, 220, 120, 18);
+        context.fill();
+        context.stroke();
+
+        context.fillStyle = "#182536";
+        context.font = "600 24px Avenir Next, sans-serif";
+        const words = card.text.split(/\s+/);
+        const lines: string[] = [];
+        let currentLine = "";
+
+        words.forEach((word) => {
+          const candidate = currentLine.length > 0 ? `${currentLine} ${word}` : word;
+
+          if (context.measureText(candidate).width > 180 && currentLine.length > 0) {
+            lines.push(currentLine);
+            currentLine = word;
+            return;
+          }
+
+          currentLine = candidate;
+        });
+
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+        }
+
+        lines.slice(0, 4).forEach((line, index) => {
+          context.fillText(line, card.x + 18, card.y + 38 + index * 26);
+        });
+      });
+
+    return canvas.toDataURL("image/png");
+  }
+
+  function handleCardPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    card: BoardCard,
+  ) {
+    const board = boardRef.current;
+
+    if (!board) {
+      return;
+    }
+
+    const bounds = board.getBoundingClientRect();
+
+    dragRef.current = {
+      cardId: card.id,
+      pointerId: event.pointerId,
+      offsetX: event.clientX - bounds.left - card.x,
+      offsetY: event.clientY - bounds.top - card.y,
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleCardPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const dragState = dragRef.current;
+    const board = boardRef.current;
+    const active = activeNote;
+
+    if (!dragState || dragState.pointerId !== event.pointerId || !board || !active) {
+      return;
+    }
+
+    const bounds = board.getBoundingClientRect();
+    const nextX = Math.max(12, event.clientX - bounds.left - dragState.offsetX);
+    const nextY = Math.max(12, event.clientY - bounds.top - dragState.offsetY);
+
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id !== active.id
+          ? note
+          : {
+              ...note,
+              cards: note.cards.map((card) =>
+                card.id === dragState.cardId
+                  ? { ...card, x: nextX, y: nextY }
+                  : card,
+              ),
+            },
+      ),
+    );
+  }
+
+  function handleCardPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const dragState = dragRef.current;
+
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    dragRef.current = null;
+
+    updateActiveNote((note) => ({
+      ...note,
+      updatedAt: nowIso(),
+    }));
+  }
+
   async function handleStorm() {
     if (!activeNote) {
       setAiError("Open a board before using Storm.");
@@ -530,14 +725,15 @@ export default function Home() {
 
     const trimmedKey = aiApiKey.trim();
     const context = buildStormContext(activeNote);
+    const snapshot = buildStormSnapshot(activeNote);
 
     if (trimmedKey.length === 0) {
-      setAiError("Add a DeepSeek API key to use Storm.");
+      setAiError("Add an OpenAI API key to use Storm.");
       return;
     }
 
-    if (!context.canAnalyze) {
-      setAiError("Name the board or add text cards so Storm has context.");
+    if (!snapshot && !context.canAnalyze) {
+      setAiError("Add some board content before using Storm.");
       return;
     }
 
@@ -545,40 +741,100 @@ export default function Home() {
     setAiError("");
 
     try {
-      const response = await fetch(DEEPSEEK_CHAT_URL, {
+      const response = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${trimmedKey}`,
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
-          temperature: 0.6,
-          max_tokens: 500,
-          messages: [
+          model: "gpt-4.1-nano",
+          max_output_tokens: 220,
+          input: [
             {
               role: "system",
-              content:
-                "You are Storm, an AI layer inside a whiteboard app. Infer the topic from the board context and provide concise, relevant information the user would want on a whiteboard. Respond with short bullet sections titled Topic read, Relevant information, Key questions, and Useful next steps.",
+              content: [
+                {
+                  type: "input_text",
+                  text:
+                    "You are Storm, an AI layer inside a whiteboard app. Read the whiteboard as literally as possible. Prefer visible text or symbols over generic interpretation. Return exactly 2 concise sticky notes.",
+                },
+              ],
             },
             {
               role: "user",
-              content: [
-                `Note title: ${context.title || "(untitled)"}`,
-                context.boardTexts.length > 0
-                  ? `Board text:\n- ${context.boardTexts.join("\n- ")}`
-                  : "Board text: none",
-                `Stroke count: ${activeNote.strokes.length}`,
-                "Interpret what this whiteboard is about and brainstorm useful context the user should see on the board.",
-              ].join("\n"),
+              content: snapshot
+                ? [
+                  {
+                      type: "input_text",
+                      text: [
+                        `Board title: ${context.title || "(untitled)"}`,
+                        context.boardTexts.length > 0
+                          ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
+                          : "Existing manual board text: none",
+                        "Analyze the attached whiteboard snapshot. If handwriting is sparse, identify the literal visible marks or likely word fragments instead of inventing a broad topic.",
+                      ].join("\n"),
+                  },
+                  {
+                    type: "input_image",
+                    image_url: snapshot,
+                  },
+                  ]
+                : [
+                    {
+                      type: "input_text",
+                      text: [
+                        `Board title: ${context.title || "(untitled)"}`,
+                        context.boardTexts.length > 0
+                          ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
+                          : "Existing manual board text: none",
+                        "Infer the board literally and return exactly 2 useful sticky notes.",
+                      ].join("\n"),
+                    },
+                  ],
             },
           ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "storm_sticky_notes",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  sticky_notes: {
+                    type: "array",
+                    minItems: 2,
+                    maxItems: 2,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        text: {
+                          type: "string",
+                        },
+                      },
+                      required: ["text"],
+                    },
+                  },
+                },
+                required: ["sticky_notes"],
+              },
+            },
+          },
         }),
       });
 
       const payload = (await response.json()) as {
         error?: { message?: string };
-        choices?: Array<{ message?: { content?: string | null } }>;
+        output_text?: string;
+        output?: Array<{
+          content?: Array<{
+            type?: string;
+            text?: string;
+          }>;
+        }>;
       };
 
       if (!response.ok) {
@@ -587,14 +843,27 @@ export default function Home() {
         );
       }
 
-      const content = payload.choices?.[0]?.message?.content?.trim();
+      const content = (
+        payload.output_text ??
+        payload.output
+          ?.flatMap((item) => item.content ?? [])
+          .find((item) => item.type === "output_text" && typeof item.text === "string")
+          ?.text ??
+        ""
+      ).trim();
 
       if (!content) {
         throw new Error("The AI response was empty.");
       }
 
       setAiResponse(content);
-      addCardsToActiveNote(buildCardTexts(content), "ai");
+      const nextCards = buildStormCardsFromJson(content);
+
+      if (nextCards.length === 0) {
+        throw new Error("Storm returned an unexpected format.");
+      }
+
+      replaceAiCards(nextCards);
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : "The AI request failed.",
@@ -821,10 +1090,15 @@ export default function Home() {
                   className={`idea-card idea-card-${card.source}`}
                   key={card.id}
                   style={{ left: `${card.x}px`, top: `${card.y}px` }}
+                  onPointerDown={(event) => handleCardPointerDown(event, card)}
+                  onPointerMove={handleCardPointerMove}
+                  onPointerUp={handleCardPointerUp}
+                  onPointerCancel={handleCardPointerUp}
                 >
                   <button
                     className="idea-card-delete"
                     aria-label="Remove board note"
+                    onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => handleDeleteCard(card.id)}
                   >
                     Remove
@@ -902,7 +1176,7 @@ export default function Home() {
         <section className="ai-panel">
           <div className="field-block">
             <label className="field-label" htmlFor="ai-api-key">
-              Storm API key
+              OpenAI API key
             </label>
             <input
               id="ai-api-key"
@@ -916,8 +1190,9 @@ export default function Home() {
 
           <div className="ai-actions">
             <span className="storm-helper">
-              Storm reads the board title and text cards, then drops brainstorm
-              notes onto the board automatically.
+              Storm uses OpenAI `gpt-4.1-nano`, the lowest-cost image-capable
+              model I could verify, and drops two brainstorm notes onto the
+              board automatically.
             </span>
           </div>
 
