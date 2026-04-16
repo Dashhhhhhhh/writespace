@@ -215,6 +215,19 @@ function buildCardTexts(value: string) {
     .map((line) => (line.length > 180 ? `${line.slice(0, 177)}...` : line));
 }
 
+function buildStormContext(note: Note) {
+  const title = note.title.trim();
+  const manualCards = note.cards
+    .map((card) => card.text.trim())
+    .filter((text) => text.length > 0);
+
+  return {
+    title,
+    manualCards,
+    canAnalyze: title.length > 0 || manualCards.length > 0,
+  };
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -226,7 +239,6 @@ export default function Home() {
   const [mode, setMode] = useState<DrawMode>("draw");
   const [isHydrated, setIsHydrated] = useState(false);
   const [aiApiKey, setAiApiKey] = useState("");
-  const [aiIdea, setAiIdea] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -370,7 +382,6 @@ export default function Home() {
   useEffect(() => {
     setAiResponse("");
     setAiError("");
-    setAiIdea("");
   }, [activeNoteId]);
 
   function updateActiveNote(
@@ -510,17 +521,22 @@ export default function Home() {
     }));
   }
 
-  async function handleBrainstorm() {
-    const trimmedKey = aiApiKey.trim();
-    const trimmedIdea = aiIdea.trim();
-
-    if (trimmedKey.length === 0) {
-      setAiError("Add a DeepSeek API key to use AI brainstorming.");
+  async function handleStorm() {
+    if (!activeNote) {
+      setAiError("Open a note before using Storm.");
       return;
     }
 
-    if (trimmedIdea.length === 0) {
-      setAiError("Enter an idea first.");
+    const trimmedKey = aiApiKey.trim();
+    const context = buildStormContext(activeNote);
+
+    if (trimmedKey.length === 0) {
+      setAiError("Add a DeepSeek API key to use Storm.");
+      return;
+    }
+
+    if (!context.canAnalyze) {
+      setAiError("Name the note or pin some board text so Storm has context.");
       return;
     }
 
@@ -536,20 +552,23 @@ export default function Home() {
         },
         body: JSON.stringify({
           model: "deepseek-chat",
-          temperature: 0.9,
+          temperature: 0.6,
           max_tokens: 500,
           messages: [
             {
               role: "system",
               content:
-                "You are a sharp brainstorming partner inside a whiteboard app. Respond with short, scannable sections titled Core direction, Angles, Questions, and Next steps. Use bullets and concrete suggestions.",
+                "You are Storm, an AI layer inside a whiteboard app. Infer the topic from the note context and provide concise, relevant information the user would want on a whiteboard. Respond with short bullet sections titled Topic read, Relevant information, Key questions, and Useful next steps.",
             },
             {
               role: "user",
               content: [
-                `Whiteboard note: ${activeTitle}`,
-                `Idea: ${trimmedIdea}`,
-                "Help me expand this into a useful brainstorm I can pin onto a whiteboard.",
+                `Note title: ${context.title || "(untitled)"}`,
+                context.manualCards.length > 0
+                  ? `Board text:\n- ${context.manualCards.join("\n- ")}`
+                  : "Board text: none",
+                `Stroke count: ${activeNote.strokes.length}`,
+                "Interpret what this whiteboard is about and add useful context.",
               ].join("\n"),
             },
           ],
@@ -581,10 +600,6 @@ export default function Home() {
     } finally {
       setIsAiLoading(false);
     }
-  }
-
-  function handlePinIdea() {
-    addCardsToActiveNote([aiIdea], "manual");
   }
 
   function handlePinAiResponse() {
@@ -883,8 +898,8 @@ export default function Home() {
 
         <section className="ai-panel">
           <div className="ai-panel-head">
-            <p className="eyebrow">AI Brainstorm</p>
-            <h3>DeepSeek helper</h3>
+            <p className="eyebrow">Storm</p>
+            <h3>Context reader</h3>
           </div>
 
           <div className="field-block">
@@ -901,41 +916,20 @@ export default function Home() {
             />
           </div>
 
-          <div className="field-block">
-            <label className="field-label" htmlFor="ai-idea">
-              Idea
-            </label>
-            <textarea
-              id="ai-idea"
-              className="idea-input"
-              value={aiIdea}
-              onChange={(event) => setAiIdea(event.target.value)}
-              placeholder="Describe what you want to explore or expand"
-              rows={5}
-            />
-          </div>
-
           <div className="ai-actions">
             <button
               className="primary-button"
-              onClick={handleBrainstorm}
+              onClick={handleStorm}
               disabled={isAiLoading}
             >
-              {isAiLoading ? "Thinking..." : "Brainstorm"}
-            </button>
-            <button
-              className="ghost-button"
-              onClick={handlePinIdea}
-              disabled={aiIdea.trim().length === 0}
-            >
-              Pin idea
+              {isAiLoading ? "Reading..." : "Storm"}
             </button>
             <button
               className="ghost-button"
               onClick={handlePinAiResponse}
               disabled={aiResponse.trim().length === 0}
             >
-              Pin response
+              Pin storm notes
             </button>
           </div>
 
@@ -943,12 +937,16 @@ export default function Home() {
 
           <div className="ai-response">
             <p className="field-label">Response</p>
-            <pre>{aiResponse || "Ask for a brainstorm to generate notes here."}</pre>
+            <pre>
+              {aiResponse ||
+                "Storm reads the note title and any pinned board text, then returns relevant information."}
+            </pre>
           </div>
 
           <p className="ai-footnote">
-            The key stays in local browser storage so it does not get published
-            in the GitHub Pages bundle.
+            Storm uses the current note as context. The API key stays in local
+            browser storage so it does not get published in the GitHub Pages
+            bundle.
           </p>
         </section>
       </aside>
