@@ -24,18 +24,29 @@ type Stroke = {
   points: Point[];
 };
 
+type BoardCard = {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  source: "ai" | "manual";
+};
+
 type Note = {
   id: string;
   title: string;
   strokes: Stroke[];
+  cards: BoardCard[];
   updatedAt: string;
 };
 
 const STORAGE_KEY = "writespace.notes.v1";
+const AI_KEY_STORAGE = "writespace.deepseek.key.v1";
 const CANVAS_BACKGROUND = "#ffffff";
 const PALETTE = ["#182536", "#2f6fed", "#0f9d7a", "#f29f05", "#d95d39"];
 const DEFAULT_COLOR = PALETTE[0];
 const DEFAULT_SIZE = 8;
+const DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions";
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -54,6 +65,7 @@ function createEmptyNote(index: number) {
     id: createId(),
     title: `Note ${index}`,
     strokes: [],
+    cards: [],
     updatedAt: nowIso(),
   } satisfies Note;
 }
@@ -78,6 +90,20 @@ function normalizeNote(value: Partial<Note>, index: number): Note {
               )
             : [],
         }))
+      : [],
+    cards: Array.isArray(value.cards)
+      ? value.cards
+          .filter((card) => typeof card === "object" && card !== null)
+          .map((card, cardIndex) => ({
+            id: typeof card.id === "string" ? card.id : createId(),
+            text:
+              typeof card.text === "string" && card.text.trim().length > 0
+                ? card.text
+                : `Idea ${cardIndex + 1}`,
+            x: typeof card.x === "number" ? card.x : 24,
+            y: typeof card.y === "number" ? card.y : 24,
+            source: card.source === "manual" ? "manual" : "ai",
+          }))
       : [],
     updatedAt:
       typeof value.updatedAt === "string" ? value.updatedAt : nowIso(),
@@ -170,6 +196,25 @@ function formatUpdatedAt(value: string) {
   }).format(date);
 }
 
+function compactIdeaText(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function buildCardTexts(value: string) {
+  const lines = value
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  return lines
+    .slice(0, 4)
+    .map((line) => (line.length > 180 ? `${line.slice(0, 177)}...` : line));
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +225,11 @@ export default function Home() {
   const [brushSize, setBrushSize] = useState(DEFAULT_SIZE);
   const [mode, setMode] = useState<DrawMode>("draw");
   const [isHydrated, setIsHydrated] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiIdea, setAiIdea] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const activeNote = notes.find((note) => note.id === activeNoteId) ?? null;
   const orderedNotes = [...notes].sort(
@@ -189,6 +239,11 @@ export default function Home() {
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
+    const savedAiKey = window.localStorage.getItem(AI_KEY_STORAGE);
+
+    if (typeof savedAiKey === "string") {
+      setAiApiKey(savedAiKey);
+    }
 
     if (!stored) {
       const firstNote = createEmptyNote(1);
@@ -242,6 +297,14 @@ export default function Home() {
       JSON.stringify({ notes, activeNoteId }),
     );
   }, [activeNoteId, isHydrated, notes]);
+
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(AI_KEY_STORAGE, aiApiKey.trim());
+  }, [aiApiKey, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated || notes.length === 0) {
@@ -304,6 +367,12 @@ export default function Home() {
     paintCanvas(canvas, activeNote?.strokes ?? []);
   }, [activeNote]);
 
+  useEffect(() => {
+    setAiResponse("");
+    setAiError("");
+    setAiIdea("");
+  }, [activeNoteId]);
+
   function updateActiveNote(
     updater: (note: Note) => Note,
     fallbackTitle = notes.length + 1,
@@ -337,6 +406,36 @@ export default function Home() {
     const nextNote = createEmptyNote(notes.length + 1);
     setNotes([nextNote, ...notes]);
     setActiveNoteId(nextNote.id);
+  }
+
+  function addCardsToActiveNote(texts: string[], source: BoardCard["source"]) {
+    const cleanedTexts = texts.map(compactIdeaText).filter((text) => text.length > 0);
+
+    if (cleanedTexts.length === 0) {
+      return;
+    }
+
+    updateActiveNote((note) => {
+      const nextCards = cleanedTexts.map((text, index) => {
+        const cardIndex = note.cards.length + index;
+        const column = cardIndex % 2;
+        const row = Math.floor(cardIndex / 2);
+
+        return {
+          id: createId(),
+          text,
+          x: 28 + column * 250,
+          y: 28 + row * 152,
+          source,
+        } satisfies BoardCard;
+      });
+
+      return {
+        ...note,
+        cards: [...note.cards, ...nextCards],
+        updatedAt: nowIso(),
+      };
+    });
   }
 
   function handleDeleteNote(noteId: string) {
@@ -397,6 +496,99 @@ export default function Home() {
     link.href = canvas.toDataURL("image/png");
     link.download = `${filename}.png`;
     link.click();
+  }
+
+  function handleDeleteCard(cardId: string) {
+    if (!activeNote) {
+      return;
+    }
+
+    updateActiveNote((note) => ({
+      ...note,
+      cards: note.cards.filter((card) => card.id !== cardId),
+      updatedAt: nowIso(),
+    }));
+  }
+
+  async function handleBrainstorm() {
+    const trimmedKey = aiApiKey.trim();
+    const trimmedIdea = aiIdea.trim();
+
+    if (trimmedKey.length === 0) {
+      setAiError("Add a DeepSeek API key to use AI brainstorming.");
+      return;
+    }
+
+    if (trimmedIdea.length === 0) {
+      setAiError("Enter an idea first.");
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError("");
+
+    try {
+      const response = await fetch(DEEPSEEK_CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${trimmedKey}`,
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          temperature: 0.9,
+          max_tokens: 500,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a sharp brainstorming partner inside a whiteboard app. Respond with short, scannable sections titled Core direction, Angles, Questions, and Next steps. Use bullets and concrete suggestions.",
+            },
+            {
+              role: "user",
+              content: [
+                `Whiteboard note: ${activeTitle}`,
+                `Idea: ${trimmedIdea}`,
+                "Help me expand this into a useful brainstorm I can pin onto a whiteboard.",
+              ].join("\n"),
+            },
+          ],
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: { message?: string };
+        choices?: Array<{ message?: { content?: string | null } }>;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error?.message ?? "The AI request failed. Try again.",
+        );
+      }
+
+      const content = payload.choices?.[0]?.message?.content?.trim();
+
+      if (!content) {
+        throw new Error("The AI response was empty.");
+      }
+
+      setAiResponse(content);
+    } catch (error) {
+      setAiError(
+        error instanceof Error ? error.message : "The AI request failed.",
+      );
+    } finally {
+      setIsAiLoading(false);
+    }
+  }
+
+  function handlePinIdea() {
+    addCardsToActiveNote([aiIdea], "manual");
+  }
+
+  function handlePinAiResponse() {
+    addCardsToActiveNote(buildCardTexts(aiResponse), "ai");
   }
 
   function getCanvasPoint(
@@ -508,12 +700,7 @@ export default function Home() {
       <section className="workspace">
         <header className="panel hero-panel">
           <div className="brand-block">
-            <p className="eyebrow">WriteSpace</p>
             <h1>WriteSpace</h1>
-            <p className="intro">
-              Sketch ideas, annotate diagrams, and keep every board ready for a
-              quick export.
-            </p>
           </div>
         </header>
 
@@ -605,6 +792,24 @@ export default function Home() {
               onPointerMove={handlePointerMove}
               onPointerUp={releaseStroke}
             />
+            <div className="board-overlay">
+              {activeNote?.cards.map((card) => (
+                <article
+                  className={`idea-card idea-card-${card.source}`}
+                  key={card.id}
+                  style={{ left: `${card.x}px`, top: `${card.y}px` }}
+                >
+                  <button
+                    className="idea-card-delete"
+                    aria-label="Remove board note"
+                    onClick={() => handleDeleteCard(card.id)}
+                  >
+                    Remove
+                  </button>
+                  <p>{card.text}</p>
+                </article>
+              ))}
+            </div>
             <div className="board-hint">
               Draw with mouse, touch, or pen. Export the board any time as a
               PNG.
@@ -675,6 +880,77 @@ export default function Home() {
             );
           })}
         </div>
+
+        <section className="ai-panel">
+          <div className="ai-panel-head">
+            <p className="eyebrow">AI Brainstorm</p>
+            <h3>DeepSeek helper</h3>
+          </div>
+
+          <div className="field-block">
+            <label className="field-label" htmlFor="ai-api-key">
+              API key
+            </label>
+            <input
+              id="ai-api-key"
+              className="title-input"
+              type="password"
+              value={aiApiKey}
+              onChange={(event) => setAiApiKey(event.target.value)}
+              placeholder="Stored only in this browser"
+            />
+          </div>
+
+          <div className="field-block">
+            <label className="field-label" htmlFor="ai-idea">
+              Idea
+            </label>
+            <textarea
+              id="ai-idea"
+              className="idea-input"
+              value={aiIdea}
+              onChange={(event) => setAiIdea(event.target.value)}
+              placeholder="Describe what you want to explore or expand"
+              rows={5}
+            />
+          </div>
+
+          <div className="ai-actions">
+            <button
+              className="primary-button"
+              onClick={handleBrainstorm}
+              disabled={isAiLoading}
+            >
+              {isAiLoading ? "Thinking..." : "Brainstorm"}
+            </button>
+            <button
+              className="ghost-button"
+              onClick={handlePinIdea}
+              disabled={aiIdea.trim().length === 0}
+            >
+              Pin idea
+            </button>
+            <button
+              className="ghost-button"
+              onClick={handlePinAiResponse}
+              disabled={aiResponse.trim().length === 0}
+            >
+              Pin response
+            </button>
+          </div>
+
+          {aiError ? <p className="ai-error">{aiError}</p> : null}
+
+          <div className="ai-response">
+            <p className="field-label">Response</p>
+            <pre>{aiResponse || "Ask for a brainstorm to generate notes here."}</pre>
+          </div>
+
+          <p className="ai-footnote">
+            The key stays in local browser storage so it does not get published
+            in the GitHub Pages bundle.
+          </p>
+        </section>
       </aside>
     </main>
   );
