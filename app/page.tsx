@@ -233,13 +233,13 @@ function buildCardTexts(value: string) {
 function buildStormCardsFromJson(value: string) {
   try {
     const parsed = JSON.parse(value) as {
-      sticky_notes?: Array<{ text?: string }>;
+      sticky_note?: string;
     };
-    const notes = Array.isArray(parsed.sticky_notes) ? parsed.sticky_notes : [];
+    const notes = [parsed.sticky_note];
 
     return notes
-      .slice(0, 2)
-      .map((note) => compactIdeaText(note.text ?? ""))
+      .slice(0, 1)
+      .map((note) => compactIdeaText(note ?? ""))
       .filter((text) => text.length > 0);
   } catch {
     return [];
@@ -487,7 +487,7 @@ export default function Home() {
     });
   }
 
-  function replaceAiCards(texts: string[]) {
+  function addAiCards(texts: string[]) {
     const cleanedTexts = texts.map(compactIdeaText).filter((text) => text.length > 0);
 
     if (cleanedTexts.length === 0) {
@@ -495,18 +495,24 @@ export default function Home() {
     }
 
     updateActiveNote((note) => {
-      const preservedCards = note.cards.filter((card) => card.source !== "ai");
-      const nextCards = cleanedTexts.slice(0, 2).map((text, index) => ({
-        id: createId(),
-        text,
-        x: 28 + index * 250,
-        y: 28,
-        source: "ai",
-      })) as BoardCard[];
+      const nextCards = cleanedTexts.slice(0, 1).map((text, index) => {
+        const aiCount = note.cards.filter((card) => card.source === "ai").length;
+        const cardIndex = aiCount + index;
+        const column = cardIndex % 2;
+        const row = Math.floor(cardIndex / 2);
+
+        return {
+          id: createId(),
+          text,
+          x: 28 + column * 250,
+          y: 28 + row * 152,
+          source: "ai",
+        };
+      }) as BoardCard[];
 
       return {
         ...note,
-        cards: [...preservedCards, ...nextCards],
+        cards: [...note.cards, ...nextCards],
         updatedAt: nowIso(),
       };
     });
@@ -757,7 +763,7 @@ export default function Home() {
                 {
                   type: "input_text",
                   text:
-                    "You are Storm, an AI layer inside a whiteboard app. Read the whiteboard as literally as possible. Prefer visible text or symbols over generic interpretation. Return exactly 2 concise sticky notes.",
+                    "You are Storm, an AI layer inside a whiteboard app. Read the whiteboard as literally as possible. Prefer visible text or symbols over generic interpretation. Return one short sticky note that adds a relevant fact, definition, or fun detail about what the writing most likely says. Do not return generic comments about whiteboards or handwriting.",
                 },
               ],
             },
@@ -772,7 +778,7 @@ export default function Home() {
                         context.boardTexts.length > 0
                           ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
                           : "Existing manual board text: none",
-                        "Analyze the attached whiteboard snapshot. If handwriting is sparse, identify the literal visible marks or likely word fragments instead of inventing a broad topic.",
+                        "Analyze the attached whiteboard snapshot. If handwriting is sparse, identify the literal visible marks or likely word fragments instead of inventing a broad topic, then return one sticky note with one interesting or useful fact specifically about that reading.",
                       ].join("\n"),
                   },
                   {
@@ -788,7 +794,7 @@ export default function Home() {
                         context.boardTexts.length > 0
                           ? `Existing manual board text:\n- ${context.boardTexts.join("\n- ")}`
                           : "Existing manual board text: none",
-                        "Infer the board literally and return exactly 2 useful sticky notes.",
+                        "Infer the board literally, then return one sticky note with one interesting or useful fact specifically about that reading.",
                       ].join("\n"),
                     },
                   ],
@@ -803,23 +809,13 @@ export default function Home() {
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  sticky_notes: {
-                    type: "array",
-                    minItems: 2,
-                    maxItems: 2,
-                    items: {
-                      type: "object",
-                      additionalProperties: false,
-                      properties: {
-                        text: {
-                          type: "string",
-                        },
-                      },
-                      required: ["text"],
-                    },
+                  sticky_note: {
+                    type: "string",
+                    description:
+                      "A concise sticky note with a relevant fact, definition, or fun detail about what the writing most likely says.",
                   },
                 },
-                required: ["sticky_notes"],
+                required: ["sticky_note"],
               },
             },
           },
@@ -863,7 +859,7 @@ export default function Home() {
         throw new Error("Storm returned an unexpected format.");
       }
 
-      replaceAiCards(nextCards);
+      addAiCards(nextCards);
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : "The AI request failed.",
