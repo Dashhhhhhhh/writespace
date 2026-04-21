@@ -508,9 +508,27 @@ button {
   overflow: hidden;
 }
 
-.latex-output pre {
+.latex-rendered,
+.latex-render-fallback {
   margin: 0;
   padding: 22px;
+}
+
+.latex-rendered {
+  min-height: 220px;
+  overflow: auto;
+}
+
+.latex-rendered .katex-display {
+  margin: 0;
+  text-align: left;
+}
+
+.latex-rendered .katex {
+  font-size: 1.25rem;
+}
+
+.latex-render-fallback {
   overflow: auto;
   font-family: "SF Mono", "Menlo", "Monaco", monospace;
   font-size: 0.95rem;

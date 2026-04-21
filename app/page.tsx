@@ -1,5 +1,6 @@
 "use client";
 
+import katex from "katex";
 import {
   useEffect,
   useRef,
@@ -92,6 +93,24 @@ function formatLatexText(value: string) {
   });
 
   return formatted.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function renderLatexHtml(value: string) {
+  const latex = formatLatexText(value);
+
+  if (latex.length === 0) {
+    return "";
+  }
+
+  try {
+    return katex.renderToString(latex, {
+      displayMode: true,
+      throwOnError: false,
+      strict: "ignore",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function createId() {
@@ -1003,6 +1022,7 @@ export default function Home() {
     : "Loading board";
   const activeUpdatedAt = activeNote ? formatUpdatedAt(activeNote.updatedAt) : "";
   const strokeCount = activeNote?.strokes.length ?? 0;
+  const renderedLatexHtml = renderLatexHtml(activeNote?.latexOutput ?? "");
 
   return (
     <main className="app-shell">
@@ -1192,7 +1212,6 @@ export default function Home() {
       <section className="panel latex-panel">
         <div className="latex-panel-header">
           <div>
-            <p className="eyebrow">LaTeX</p>
             <h2>Board transcription</h2>
           </div>
           <button
@@ -1213,9 +1232,16 @@ export default function Home() {
 
         <div className="latex-output">
           {activeNote?.latexOutput.trim() ? (
-            <pre>
-              <code>{activeNote.latexOutput}</code>
-            </pre>
+            renderedLatexHtml ? (
+              <div
+                className="latex-rendered"
+                dangerouslySetInnerHTML={{ __html: renderedLatexHtml }}
+              />
+            ) : (
+              <pre className="latex-render-fallback">
+                <code>{activeNote.latexOutput}</code>
+              </pre>
+            )
           ) : (
             <p className="latex-empty">
               No LaTeX yet. Use <strong>Transcribe</strong> to convert the current
