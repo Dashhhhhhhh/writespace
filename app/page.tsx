@@ -339,6 +339,8 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const activeStrokeRef = useRef<Stroke | null>(null);
+  const queuedLatexNoteRef = useRef<Note | null>(null);
+  const isProcessingLatexRef = useRef(false);
   const dragRef = useRef<{
     cardId: string;
     pointerId: number;
@@ -504,6 +506,94 @@ export default function Home() {
         note.id === activeNote.id ? updater(note) : note,
       ),
     );
+  }
+
+  async function requestLatexTranscription(note: Note) {
+    queuedLatexNoteRef.current = note;
+
+    if (isProcessingLatexRef.current) {
+      return;
+    }
+
+    isProcessingLatexRef.current = true;
+    setIsLatexLoading(true);
+    setLatexError("");
+    setIsLatexCopied(false);
+
+    try {
+      while (queuedLatexNoteRef.current) {
+        const nextNote = queuedLatexNoteRef.current;
+        queuedLatexNoteRef.current = null;
+
+        const context = buildLatexContext(nextNote);
+        const snapshot = buildBoardSnapshot(nextNote, true);
+
+        if (!snapshot && !context.canAnalyze) {
+          setNotes((currentNotes) =>
+            currentNotes.map((currentNote) =>
+              currentNote.id === nextNote.id
+                ? { ...currentNote, latexOutput: "" }
+                : currentNote,
+            ),
+          );
+          continue;
+        }
+
+        const response = await fetch("/api/latex", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            boardTitle: context.title,
+            boardTexts: context.boardTexts,
+            snapshot,
+          }),
+        });
+
+        const payload = (await response.json()) as {
+          error?: { message?: string } | string;
+          latex?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(
+            payload.error && typeof payload.error === "object"
+              ? payload.error.message ?? "The LaTeX transcription failed."
+              : typeof payload.error === "string"
+                ? payload.error
+                : "The LaTeX transcription failed.",
+          );
+        }
+
+        const latex = formatLatexText(payload.latex ?? "");
+
+        if (!latex) {
+          throw new Error("The LaTeX transcription was empty.");
+        }
+
+        setNotes((currentNotes) =>
+          currentNotes.map((currentNote) =>
+            currentNote.id === nextNote.id
+              ? { ...currentNote, latexOutput: latex }
+              : currentNote,
+          ),
+        );
+      }
+    } catch (error) {
+      setLatexError(
+        error instanceof Error
+          ? error.message
+          : "The LaTeX transcription failed.",
+      );
+    } finally {
+      isProcessingLatexRef.current = false;
+      setIsLatexLoading(false);
+
+      if (queuedLatexNoteRef.current) {
+        void requestLatexTranscription(queuedLatexNoteRef.current);
+      }
+    }
   }
 
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -836,74 +926,6 @@ export default function Home() {
     }
   }
 
-  async function handleTranscribeLatex() {
-    if (!activeNote) {
-      setLatexError("Open a board before transcribing to LaTeX.");
-      return;
-    }
-
-    const context = buildLatexContext(activeNote);
-    const snapshot = buildBoardSnapshot(activeNote, true);
-
-    if (!snapshot && !context.canAnalyze) {
-      setLatexError("Add some board content before transcribing to LaTeX.");
-      return;
-    }
-
-    setIsLatexLoading(true);
-    setLatexError("");
-    setIsLatexCopied(false);
-
-    try {
-      const response = await fetch("/api/latex", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          boardTitle: context.title,
-          boardTexts: context.boardTexts,
-          snapshot,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        error?: { message?: string } | string;
-        latex?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(
-          payload.error && typeof payload.error === "object"
-            ? payload.error.message ?? "The LaTeX transcription failed."
-            : typeof payload.error === "string"
-              ? payload.error
-              : "The LaTeX transcription failed.",
-        );
-      }
-
-      const latex = formatLatexText(payload.latex ?? "");
-
-      if (!latex) {
-        throw new Error("The LaTeX transcription was empty.");
-      }
-
-      updateActiveNote((note) => ({
-        ...note,
-        latexOutput: latex,
-        updatedAt: nowIso(),
-      }));
-    } catch (error) {
-      setLatexError(
-        error instanceof Error
-          ? error.message
-          : "The LaTeX transcription failed.",
-      );
-    } finally {
-      setIsLatexLoading(false);
-    }
-  }
-
   async function handleCopyLatex() {
     const latex = activeNote?.latexOutput.trim() ?? "";
 
@@ -989,24 +1011,29 @@ export default function Home() {
 
   function commitStroke() {
     const activeStroke = activeStrokeRef.current;
+    const currentNote = activeNote;
 
-    if (!activeStroke) {
+    if (!activeStroke || !currentNote) {
       return;
     }
 
     activeStrokeRef.current = null;
-
-    updateActiveNote((note) => ({
-      ...note,
-      strokes: [
-        ...note.strokes,
-        {
-          ...activeStroke,
-          points: activeStroke.points.map((point) => ({ ...point })),
-        },
-      ],
+    const nextStroke = {
+      ...activeStroke,
+      points: activeStroke.points.map((point) => ({ ...point })),
+    };
+    const updatedNote = {
+      ...currentNote,
+      strokes: [...currentNote.strokes, nextStroke],
       updatedAt: nowIso(),
-    }));
+    };
+
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id === currentNote.id ? updatedNote : note,
+      ),
+    );
+    void requestLatexTranscription(updatedNote);
   }
 
   function releaseStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -1041,13 +1068,6 @@ export default function Home() {
               disabled={isAiLoading}
             >
               {isAiLoading ? "Storming..." : "Storm"}
-            </button>
-            <button
-              className="secondary-button"
-              onClick={handleTranscribeLatex}
-              disabled={isLatexLoading}
-            >
-              {isLatexLoading ? "Transcribing..." : "Transcribe"}
             </button>
           </div>
 
@@ -1102,11 +1122,34 @@ export default function Home() {
               <p className="eyebrow">Whiteboard</p>
               <h2>{activeTitle}</h2>
             </div>
+            {activeNote?.latexOutput.trim() ? (
+              <div className="board-transcription" aria-live="polite">
+                {renderedLatexHtml ? (
+                  <div
+                    className="board-transcription-rendered"
+                    dangerouslySetInnerHTML={{ __html: renderedLatexHtml }}
+                  />
+                ) : (
+                  <span className="board-transcription-fallback">
+                    {activeNote.latexOutput}
+                  </span>
+                )}
+                <button
+                  className="ghost-button copy-button-inline"
+                  onClick={handleCopyLatex}
+                  disabled={!activeNote?.latexOutput.trim() || isLatexLoading}
+                >
+                  {isLatexLoading ? "Updating..." : isLatexCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            ) : null}
             <div className="board-status">
               <span>{strokeCount} strokes</span>
               <span>{activeUpdatedAt}</span>
             </div>
           </div>
+
+          {latexError ? <p className="ai-error">{latexError}</p> : null}
 
           <div className="board-surface" ref={boardRef}>
             <canvas
@@ -1141,8 +1184,8 @@ export default function Home() {
               ))}
             </div>
             <div className="board-hint">
-              Draw with mouse, touch, or pen, then transcribe the board into
-              copyable LaTeX.
+              Draw with mouse, touch, or pen. LaTeX updates automatically after
+              each stroke.
             </div>
           </div>
         </div>
@@ -1208,48 +1251,6 @@ export default function Home() {
 
         {aiError ? <p className="ai-error">{aiError}</p> : null}
       </aside>
-
-      <section className="panel latex-panel">
-        <div className="latex-panel-header">
-          <div>
-            <h2>Board transcription</h2>
-          </div>
-          <button
-            className="ghost-button"
-            onClick={handleCopyLatex}
-            disabled={!activeNote?.latexOutput.trim()}
-          >
-            {isLatexCopied ? "Copied" : "Copy LaTeX"}
-          </button>
-        </div>
-
-        <p className="latex-panel-copy">
-          Generate a cleaned LaTeX version of the current board, then copy it
-          directly from here.
-        </p>
-
-        {latexError ? <p className="ai-error">{latexError}</p> : null}
-
-        <div className="latex-output">
-          {activeNote?.latexOutput.trim() ? (
-            renderedLatexHtml ? (
-              <div
-                className="latex-rendered"
-                dangerouslySetInnerHTML={{ __html: renderedLatexHtml }}
-              />
-            ) : (
-              <pre className="latex-render-fallback">
-                <code>{activeNote.latexOutput}</code>
-              </pre>
-            )
-          ) : (
-            <p className="latex-empty">
-              No LaTeX yet. Use <strong>Transcribe</strong> to convert the current
-              board into copyable LaTeX.
-            </p>
-          )}
-        </div>
-      </section>
     </main>
   );
 }
