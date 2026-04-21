@@ -565,25 +565,6 @@ export default function Home() {
     }));
   }
 
-  function handleExportPng() {
-    if (!activeNote) {
-      return;
-    }
-
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      return;
-    }
-
-    const link = document.createElement("a");
-    const filename = slugify(activeNote.title.trim() || "writespace-note");
-
-    link.href = canvas.toDataURL("image/png");
-    link.download = `${filename}.png`;
-    link.click();
-  }
-
   function handleDeleteCard(cardId: string) {
     if (!activeNote) {
       return;
@@ -1006,7 +987,7 @@ export default function Home() {
               onClick={handleTranscribeLatex}
               disabled={isLatexLoading}
             >
-              {isLatexLoading ? "Transcribing..." : "Transcribe LaTeX"}
+              {isLatexLoading ? "Transcribing..." : "Transcribe"}
             </button>
           </div>
 
@@ -1069,9 +1050,6 @@ export default function Home() {
             </button>
             <button className="ghost-button" onClick={handleClearCanvas}>
               Clear
-            </button>
-            <button className="primary-button" onClick={handleExportPng}>
-              Export PNG
             </button>
           </div>
         </header>
@@ -1218,8 +1196,8 @@ export default function Home() {
             </pre>
           ) : (
             <p className="latex-empty">
-              No LaTeX yet. Use <strong>Transcribe LaTeX</strong> to convert the
-              current board into copyable LaTeX.
+              No LaTeX yet. Use <strong>Transcribe</strong> to convert the current
+              board into copyable LaTeX.
             </p>
           )}
         </div>
