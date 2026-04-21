@@ -4,7 +4,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -43,9 +42,57 @@ type Note = {
 
 const STORAGE_KEY = "writespace.notes.v1";
 const CANVAS_BACKGROUND = "#ffffff";
-const PALETTE = ["#182536", "#2f6fed", "#0f9d7a", "#f29f05", "#d95d39"];
-const DEFAULT_COLOR = PALETTE[0];
+const DEFAULT_COLOR = "#182536";
 const DEFAULT_SIZE = 8;
+
+function formatLatexText(value: string) {
+  const normalized = value.replace(/\r\n?/g, "\n").trim();
+
+  if (normalized.length === 0) {
+    return "";
+  }
+
+  const lines = normalized.split("\n");
+  const formatted: string[] = [];
+  let indentLevel = 0;
+  let previousLineWasBlank = false;
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+
+    if (line.length === 0) {
+      if (!previousLineWasBlank && formatted.length > 0) {
+        formatted.push("");
+      }
+      previousLineWasBlank = true;
+      return;
+    }
+
+    if (
+      /^\\end\{/.test(line) ||
+      line === "\\]" ||
+      line === "\\)" ||
+      line === "$$"
+    ) {
+      indentLevel = Math.max(0, indentLevel - 1);
+    }
+
+    formatted.push(`${"  ".repeat(indentLevel)}${line}`);
+
+    if (
+      /^\\begin\{/.test(line) ||
+      line === "\\[" ||
+      line === "\\(" ||
+      line === "$$"
+    ) {
+      indentLevel += 1;
+    }
+
+    previousLineWasBlank = false;
+  });
+
+  return formatted.join("\n").replace(/\n{3,}/g, "\n\n");
+}
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -106,7 +153,9 @@ function normalizeNote(value: Partial<Note>, index: number): Note {
           }))
       : [],
     latexOutput:
-      typeof value.latexOutput === "string" ? value.latexOutput : "",
+      typeof value.latexOutput === "string"
+        ? formatLatexText(value.latexOutput)
+        : "",
     updatedAt:
       typeof value.updatedAt === "string" ? value.updatedAt : nowIso(),
   };
@@ -188,14 +237,6 @@ function paintStrokes(
   strokes.forEach((stroke) => {
     drawStroke(context, stroke);
   });
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function formatUpdatedAt(value: string) {
@@ -287,7 +328,6 @@ export default function Home() {
   } | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState("");
-  const [brushColor, setBrushColor] = useState(DEFAULT_COLOR);
   const [brushSize, setBrushSize] = useState(DEFAULT_SIZE);
   const [mode, setMode] = useState<DrawMode>("draw");
   const [isHydrated, setIsHydrated] = useState(false);
@@ -823,7 +863,7 @@ export default function Home() {
         );
       }
 
-      const latex = (payload.latex ?? "").trim();
+      const latex = formatLatexText(payload.latex ?? "");
 
       if (!latex) {
         throw new Error("The LaTeX transcription was empty.");
@@ -898,7 +938,7 @@ export default function Home() {
 
     const nextStroke: Stroke = {
       id: createId(),
-      color: brushColor,
+      color: DEFAULT_COLOR,
       size: brushSize,
       mode,
       points: [point],
@@ -1009,24 +1049,6 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="toolbar-cluster">
-            <span className="toolbar-label">Color</span>
-            <div className="swatches">
-              {PALETTE.map((color) => (
-                <button
-                  key={color}
-                  className={`swatch${brushColor === color ? " swatch-active" : ""}`}
-                  onClick={() => {
-                    setBrushColor(color);
-                    setMode("draw");
-                  }}
-                  style={{ "--swatch-color": color } as CSSProperties}
-                  aria-label={`Select ${color} brush`}
-                />
-              ))}
-            </div>
-          </div>
-
           <div className="toolbar-cluster brush-cluster">
             <label className="toolbar-label" htmlFor="brush-size">
               Brush
@@ -1099,8 +1121,8 @@ export default function Home() {
               ))}
             </div>
             <div className="board-hint">
-              Draw with mouse, touch, or pen. Export the board any time as a
-              PNG.
+              Draw with mouse, touch, or pen, then transcribe the board into
+              copyable LaTeX.
             </div>
           </div>
         </div>

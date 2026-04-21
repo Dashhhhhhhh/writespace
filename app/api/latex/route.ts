@@ -55,7 +55,7 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text:
-                "You transcribe whiteboard content into clean, copyable LaTeX. Preserve mathematical meaning, symbols, superscripts, subscripts, fractions, matrices, Greek letters, and multi-line derivations. If the board contains ordinary prose, format it as clean LaTeX text or itemized lists. Use environments like align* only when helpful. Return only valid LaTeX content with no markdown fences, no commentary, and no surrounding explanation.",
+                "You transcribe whiteboard content into clean, copyable LaTeX. Preserve mathematical meaning, symbols, superscripts, subscripts, fractions, matrices, Greek letters, and multi-line derivations. If the board contains ordinary prose, format it as clean LaTeX text or itemized lists. Use environments like align* only when helpful. Format the output for readability with sensible line breaks and indentation for multi-line equations or environments. Return only valid LaTeX content with no markdown fences, no commentary, and no surrounding explanation.",
             },
           ],
         },
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
                     boardTexts.length > 0
                       ? `Detected board text:\n- ${boardTexts.join("\n- ")}`
                       : "Detected board text: none",
-                    "Transcribe every readable written element from the board into formatted LaTeX. Resolve handwriting where possible. If a fragment is uncertain, make the best-faith transcription and keep the output usable as LaTeX.",
+                    "Transcribe every readable written element from the board into formatted LaTeX. Resolve handwriting where possible. If a fragment is uncertain, make the best-faith transcription and keep the output usable as LaTeX. Prefer readable multi-line formatting over a single dense line.",
                   ].join("\n"),
                 },
                 {
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
                     boardTexts.length > 0
                       ? `Detected board text:\n- ${boardTexts.join("\n- ")}`
                       : "Detected board text: none",
-                    "Convert the written content into formatted LaTeX.",
+                    "Convert the written content into formatted, readable LaTeX.",
                   ].join("\n"),
                 },
               ],

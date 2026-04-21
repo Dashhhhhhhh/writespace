@@ -212,8 +212,7 @@ button {
 .ghost-button:hover,
 .note-delete:hover,
 .segmented-control button:hover,
-.note-open:hover,
-.swatch:hover {
+.note-open:hover {
   transform: translateY(-1px);
 }
 
@@ -328,27 +327,6 @@ button {
 .segment-active {
   background: var(--panel-strong);
   box-shadow: 0 8px 18px rgba(24, 37, 54, 0.08);
-}
-
-.swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.swatch {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  background: var(--swatch-color);
-  border: 3px solid rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 22px rgba(24, 37, 54, 0.14);
-}
-
-.swatch-active {
-  outline: 3px solid rgba(47, 111, 237, 0.22);
-  outline-offset: 2px;
 }
 
 .brush-cluster {
