@@ -1047,8 +1047,6 @@ export default function Home() {
   const activeTitle = activeNote
     ? activeNote.title.trim() || "Untitled board"
     : "Loading board";
-  const activeUpdatedAt = activeNote ? formatUpdatedAt(activeNote.updatedAt) : "";
-  const strokeCount = activeNote?.strokes.length ?? 0;
   const renderedLatexHtml = renderLatexHtml(activeNote?.latexOutput ?? "");
 
   return (
@@ -1143,10 +1141,6 @@ export default function Home() {
                 </button>
               </div>
             ) : null}
-            <div className="board-status">
-              <span>{strokeCount} strokes</span>
-              <span>{activeUpdatedAt}</span>
-            </div>
           </div>
 
           {latexError ? <p className="ai-error">{latexError}</p> : null}
@@ -1182,10 +1176,6 @@ export default function Home() {
                   <p>{card.text}</p>
                 </article>
               ))}
-            </div>
-            <div className="board-hint">
-              Draw with mouse, touch, or pen. LaTeX updates automatically after
-              each stroke.
             </div>
           </div>
         </div>

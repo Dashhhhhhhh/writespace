@@ -97,8 +97,6 @@ button {
 .intro,
 .note-meta,
 .toolbar-label,
-.board-hint,
-.board-status,
 .field-label,
 .brush-size {
   color: var(--muted);
@@ -399,17 +397,6 @@ button {
   font-size: 0.82rem;
 }
 
-.board-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
 .board-surface {
   position: relative;
   min-height: 68vh;
@@ -480,19 +467,6 @@ button {
   cursor: pointer;
 }
 
-.board-hint {
-  position: absolute;
-  left: 18px;
-  bottom: 18px;
-  max-width: min(520px, calc(100% - 36px));
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  font-size: 0.92rem;
-  line-height: 1.5;
-  backdrop-filter: blur(12px);
-}
-
 .primary-button:disabled,
 .ghost-button:disabled {
   cursor: not-allowed;
@@ -551,11 +525,6 @@ button {
 
   .idea-card {
     width: min(200px, calc(100% - 32px));
-  }
-
-  .board-status {
-    width: 100%;
-    border-radius: 18px;
   }
 
   .board-header {
