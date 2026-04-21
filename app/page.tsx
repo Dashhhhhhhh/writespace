@@ -323,15 +323,10 @@ function buildStormContext(note: Note) {
 }
 
 function buildLatexContext(note: Note) {
-  const title = note.title.trim();
-  const boardTexts = note.cards
-    .map((card) => card.text.trim())
-    .filter((text) => text.length > 0);
-
   return {
-    title,
-    boardTexts,
-    canAnalyze: title.length > 0 || boardTexts.length > 0,
+    title: "",
+    boardTexts: [] as string[],
+    canAnalyze: note.strokes.length > 0,
   };
 }
 
@@ -526,7 +521,7 @@ export default function Home() {
         queuedLatexNoteRef.current = null;
 
         const context = buildLatexContext(nextNote);
-        const snapshot = buildBoardSnapshot(nextNote, true);
+        const snapshot = buildBoardSnapshot(nextNote, "none");
 
         if (!snapshot && !context.canAnalyze) {
           setNotes((currentNotes) =>
@@ -726,7 +721,10 @@ export default function Home() {
     }));
   }
 
-  function buildBoardSnapshot(note: Note, includeAiCards = false) {
+  function buildBoardSnapshot(
+    note: Note,
+    cardMode: "none" | "manual" | "all" = "manual",
+  ) {
     const board = boardRef.current;
 
     if (!board) {
@@ -749,7 +747,17 @@ export default function Home() {
     paintStrokes(context, width, height, note.strokes);
 
     note.cards
-      .filter((card) => includeAiCards || card.source === "manual")
+      .filter((card) => {
+        if (cardMode === "none") {
+          return false;
+        }
+
+        if (cardMode === "all") {
+          return true;
+        }
+
+        return card.source === "manual";
+      })
       .forEach((card) => {
         context.fillStyle = "rgba(255, 247, 210, 0.96)";
         context.strokeStyle = "rgba(24, 37, 54, 0.1)";
