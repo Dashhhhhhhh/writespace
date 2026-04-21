@@ -37,6 +37,7 @@ type Note = {
   title: string;
   strokes: Stroke[];
   cards: BoardCard[];
+  latexOutput: string;
   updatedAt: string;
 };
 
@@ -64,6 +65,7 @@ function createEmptyNote(index: number) {
     title: `Board ${index}`,
     strokes: [],
     cards: [],
+    latexOutput: "",
     updatedAt: nowIso(),
   } satisfies Note;
 }
@@ -103,6 +105,8 @@ function normalizeNote(value: Partial<Note>, index: number): Note {
             source: card.source === "manual" ? "manual" : "ai",
           }))
       : [],
+    latexOutput:
+      typeof value.latexOutput === "string" ? value.latexOutput : "",
     updatedAt:
       typeof value.updatedAt === "string" ? value.updatedAt : nowIso(),
   };
@@ -258,6 +262,19 @@ function buildStormContext(note: Note) {
   };
 }
 
+function buildLatexContext(note: Note) {
+  const title = note.title.trim();
+  const boardTexts = note.cards
+    .map((card) => card.text.trim())
+    .filter((text) => text.length > 0);
+
+  return {
+    title,
+    boardTexts,
+    canAnalyze: title.length > 0 || boardTexts.length > 0,
+  };
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -277,6 +294,9 @@ export default function Home() {
   const [aiResponse, setAiResponse] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [latexError, setLatexError] = useState("");
+  const [isLatexLoading, setIsLatexLoading] = useState(false);
+  const [isLatexCopied, setIsLatexCopied] = useState(false);
 
   const activeNote = notes.find((note) => note.id === activeNoteId) ?? null;
   const orderedNotes = [...notes].sort(
@@ -404,6 +424,8 @@ export default function Home() {
   useEffect(() => {
     setAiResponse("");
     setAiError("");
+    setLatexError("");
+    setIsLatexCopied(false);
   }, [activeNoteId]);
 
   function updateActiveNote(
@@ -574,7 +596,7 @@ export default function Home() {
     }));
   }
 
-  function buildStormSnapshot(note: Note) {
+  function buildBoardSnapshot(note: Note, includeAiCards = false) {
     const board = boardRef.current;
 
     if (!board) {
@@ -597,7 +619,7 @@ export default function Home() {
     paintStrokes(context, width, height, note.strokes);
 
     note.cards
-      .filter((card) => card.source === "manual")
+      .filter((card) => includeAiCards || card.source === "manual")
       .forEach((card) => {
         context.fillStyle = "rgba(255, 247, 210, 0.96)";
         context.strokeStyle = "rgba(24, 37, 54, 0.1)";
@@ -714,7 +736,7 @@ export default function Home() {
     }
 
     const context = buildStormContext(activeNote);
-    const snapshot = buildStormSnapshot(activeNote);
+    const snapshot = buildBoardSnapshot(activeNote);
 
     if (!snapshot && !context.canAnalyze) {
       setAiError("Add some board content before using Storm.");
@@ -771,6 +793,89 @@ export default function Home() {
       );
     } finally {
       setIsAiLoading(false);
+    }
+  }
+
+  async function handleTranscribeLatex() {
+    if (!activeNote) {
+      setLatexError("Open a board before transcribing to LaTeX.");
+      return;
+    }
+
+    const context = buildLatexContext(activeNote);
+    const snapshot = buildBoardSnapshot(activeNote, true);
+
+    if (!snapshot && !context.canAnalyze) {
+      setLatexError("Add some board content before transcribing to LaTeX.");
+      return;
+    }
+
+    setIsLatexLoading(true);
+    setLatexError("");
+    setIsLatexCopied(false);
+
+    try {
+      const response = await fetch("/api/latex", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          boardTitle: context.title,
+          boardTexts: context.boardTexts,
+          snapshot,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: { message?: string } | string;
+        latex?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(
+          payload.error && typeof payload.error === "object"
+            ? payload.error.message ?? "The LaTeX transcription failed."
+            : typeof payload.error === "string"
+              ? payload.error
+              : "The LaTeX transcription failed.",
+        );
+      }
+
+      const latex = (payload.latex ?? "").trim();
+
+      if (!latex) {
+        throw new Error("The LaTeX transcription was empty.");
+      }
+
+      updateActiveNote((note) => ({
+        ...note,
+        latexOutput: latex,
+        updatedAt: nowIso(),
+      }));
+    } catch (error) {
+      setLatexError(
+        error instanceof Error
+          ? error.message
+          : "The LaTeX transcription failed.",
+      );
+    } finally {
+      setIsLatexLoading(false);
+    }
+  }
+
+  async function handleCopyLatex() {
+    const latex = activeNote?.latexOutput.trim() ?? "";
+
+    if (!latex) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(latex);
+      setIsLatexCopied(true);
+    } catch {
+      setLatexError("Copy failed. Select and copy the LaTeX manually.");
     }
   }
 
@@ -895,6 +1000,13 @@ export default function Home() {
               disabled={isAiLoading}
             >
               {isAiLoading ? "Storming..." : "Storm"}
+            </button>
+            <button
+              className="secondary-button"
+              onClick={handleTranscribeLatex}
+              disabled={isLatexLoading}
+            >
+              {isLatexLoading ? "Transcribing..." : "Transcribe LaTeX"}
             </button>
           </div>
 
@@ -1076,6 +1188,42 @@ export default function Home() {
 
         {aiError ? <p className="ai-error">{aiError}</p> : null}
       </aside>
+
+      <section className="panel latex-panel">
+        <div className="latex-panel-header">
+          <div>
+            <p className="eyebrow">LaTeX</p>
+            <h2>Board transcription</h2>
+          </div>
+          <button
+            className="ghost-button"
+            onClick={handleCopyLatex}
+            disabled={!activeNote?.latexOutput.trim()}
+          >
+            {isLatexCopied ? "Copied" : "Copy LaTeX"}
+          </button>
+        </div>
+
+        <p className="latex-panel-copy">
+          Generate a cleaned LaTeX version of the current board, then copy it
+          directly from here.
+        </p>
+
+        {latexError ? <p className="ai-error">{latexError}</p> : null}
+
+        <div className="latex-output">
+          {activeNote?.latexOutput.trim() ? (
+            <pre>
+              <code>{activeNote.latexOutput}</code>
+            </pre>
+          ) : (
+            <p className="latex-empty">
+              No LaTeX yet. Use <strong>Transcribe LaTeX</strong> to convert the
+              current board into copyable LaTeX.
+            </p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
