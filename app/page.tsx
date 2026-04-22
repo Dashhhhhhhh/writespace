@@ -292,33 +292,20 @@ function buildCardTexts(value: string) {
     .map((line) => (line.length > 180 ? `${line.slice(0, 177)}...` : line));
 }
 
-function buildStormCardsFromJson(value: string) {
-  try {
-    const parsed = JSON.parse(value) as {
-      sticky_note?: string;
-    };
-    const notes = [parsed.sticky_note];
-
-    return notes
-      .slice(0, 1)
-      .map((note) => compactIdeaText(note ?? ""))
-      .filter((text) => text.length > 0);
-  } catch {
-    return [];
-  }
-}
-
 function buildStormContext(note: Note) {
   const title = note.title.trim();
   const boardTexts = note.cards
     .filter((card) => card.source === "manual")
     .map((card) => card.text.trim())
     .filter((text) => text.length > 0);
+  const latexOutput = note.latexOutput.trim();
 
   return {
     title,
     boardTexts,
-    canAnalyze: title.length > 0 || boardTexts.length > 0,
+    latexOutput,
+    canAnalyze:
+      latexOutput.length > 0 || title.length > 0 || boardTexts.length > 0,
   };
 }
 
@@ -874,7 +861,7 @@ export default function Home() {
     }
 
     const context = buildStormContext(activeNote);
-    const snapshot = buildBoardSnapshot(activeNote);
+    const snapshot = context.latexOutput ? null : buildBoardSnapshot(activeNote);
 
     if (!snapshot && !context.canAnalyze) {
       setAiError("Add some board content before using Storm.");
@@ -893,38 +880,34 @@ export default function Home() {
         body: JSON.stringify({
           boardTitle: context.title,
           boardTexts: context.boardTexts,
+          latexOutput: context.latexOutput,
           snapshot,
         }),
       });
 
       const payload = (await response.json()) as {
-        error?: { message?: string };
-        content?: string;
+        error?: { message?: string } | string;
+        answer?: string;
       };
 
       if (!response.ok) {
         throw new Error(
-          payload.error?.message ??
-            (typeof payload.error === "string"
+          payload.error && typeof payload.error === "object"
+            ? payload.error.message ?? "The AI request failed. Try again."
+            : typeof payload.error === "string"
               ? payload.error
-              : "The AI request failed. Try again."),
+              : "The AI request failed. Try again.",
         );
       }
 
-      const content = (payload.content ?? "").trim();
+      const answer = compactIdeaText(payload.answer ?? "");
 
-      if (!content) {
+      if (!answer) {
         throw new Error("The AI response was empty.");
       }
 
-      setAiResponse(content);
-      const nextCards = buildStormCardsFromJson(content);
-
-      if (nextCards.length === 0) {
-        throw new Error("Storm returned an unexpected format.");
-      }
-
-      addAiCards(nextCards);
+      setAiResponse(answer);
+      addAiCards([answer]);
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : "The AI request failed.",

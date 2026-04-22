@@ -5,6 +5,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 type StormRequest = {
   boardTitle?: string;
   boardTexts?: string[];
+  latexOutput?: string;
   snapshot?: string | null;
 };
 
@@ -30,9 +31,16 @@ export async function POST(request: Request) {
   const boardTexts = Array.isArray(body.boardTexts)
     ? body.boardTexts.filter((value): value is string => typeof value === "string")
     : [];
+  const latexOutput =
+    typeof body.latexOutput === "string" ? body.latexOutput.trim() : "";
   const snapshot = typeof body.snapshot === "string" ? body.snapshot : null;
 
-  if (!snapshot && boardTitle.trim().length === 0 && boardTexts.length === 0) {
+  if (
+    !snapshot &&
+    latexOutput.length === 0 &&
+    boardTitle.trim().length === 0 &&
+    boardTexts.length === 0
+  ) {
     return NextResponse.json(
       { error: "Add some board content before using Storm." },
       { status: 400 },
@@ -55,14 +63,28 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text:
-                "You are Storm, an AI layer inside a whiteboard app. First identify the most likely literal topic from the visible text or symbols. Then write one short sticky note that teaches something useful about that topic itself, not about the fact that the word appears on the board. Prefer concrete facts, definitions, causes, effects, or examples. Only fall back to describing the literal marks or fragments when the board is too unclear to support a topic-level note. Do not return generic comments about whiteboards or handwriting.",
+                "You are Storm, an AI layer inside a whiteboard app. When given a LaTeX transcription, interpret the math or notation and provide the most useful direct answer, result, or takeaway in one short sticky note. Prefer solving the problem or stating the conclusion over describing the page. If the content is not a solvable problem, explain the key meaning of the expression or notation concisely. Only fall back to describing visible marks when the content is too unclear to interpret.",
             },
           ],
         },
         {
           role: "user",
           content: snapshot
-            ? [
+            ? latexOutput
+              ? [
+                  {
+                    type: "input_text",
+                    text: [
+                      `Board title: ${boardTitle.trim() || "(untitled)"}`,
+                      boardTexts.length > 0
+                        ? `Existing manual board text:\n- ${boardTexts.join("\n- ")}`
+                        : "Existing manual board text: none",
+                      `LaTeX transcription:\n${latexOutput}`,
+                      "Interpret the LaTeX transcription and return one short sticky note with the direct answer, result, or most useful takeaway. Do not summarize the whole page or talk about handwriting unless the content is too unclear to interpret.",
+                    ].join("\n"),
+                  },
+                ]
+              : [
                 {
                   type: "input_text",
                   text: [
@@ -78,7 +100,21 @@ export async function POST(request: Request) {
                   image_url: snapshot,
                 },
               ]
-            : [
+            : latexOutput
+              ? [
+                  {
+                    type: "input_text",
+                    text: [
+                      `Board title: ${boardTitle.trim() || "(untitled)"}`,
+                      boardTexts.length > 0
+                        ? `Existing manual board text:\n- ${boardTexts.join("\n- ")}`
+                        : "Existing manual board text: none",
+                      `LaTeX transcription:\n${latexOutput}`,
+                      "Interpret the LaTeX transcription and return one short sticky note with the direct answer, result, or most useful takeaway. Do not summarize the whole page.",
+                    ].join("\n"),
+                  },
+                ]
+              : [
                 {
                   type: "input_text",
                   text: [
@@ -95,19 +131,19 @@ export async function POST(request: Request) {
       text: {
         format: {
           type: "json_schema",
-          name: "storm_sticky_note",
+          name: "storm_answer",
           strict: true,
           schema: {
             type: "object",
             additionalProperties: false,
             properties: {
-              sticky_note: {
+              answer: {
                 type: "string",
                 description:
-                  "A concise sticky note with a relevant fact, definition, or useful detail about the inferred topic itself, not a description of the wording on the board.",
+                  "A concise sticky note with the direct answer, result, or most useful interpretation of the board content.",
               },
             },
-            required: ["sticky_note"],
+            required: ["answer"],
           },
         },
       },
@@ -148,5 +184,25 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ content });
+  let parsed: { answer?: string };
+
+  try {
+    parsed = JSON.parse(content) as { answer?: string };
+  } catch {
+    return NextResponse.json(
+      { error: "The AI returned an unexpected format." },
+      { status: 502 },
+    );
+  }
+
+  const answer = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
+
+  if (!answer) {
+    return NextResponse.json(
+      { error: "Storm did not return an answer." },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ answer });
 }
