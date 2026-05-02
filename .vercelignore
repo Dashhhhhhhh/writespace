@@ -1,13 +1,12 @@
 node_modules
 .next
 out
+.git
+.env*
+.playwright-cli
+data/nec/source
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
-data/nec/source/
-data/nec/index/
-.env*.local
-.playwright-cli/
-.vercel

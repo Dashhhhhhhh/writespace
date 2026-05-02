@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "index:nec": "node scripts/build-nec-index.mjs"
   },
   "dependencies": {
-    "katex": "^0.16.45",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WriteSpace Whiteboard",
-  description: "A clean browser whiteboard for drawing, saving notes, and exporting boards.",
+  title: "NEC Chat",
+  description:
+    "A National Electrical Code chat assistant that answers from a licensed NEC index and cites sections.",
 };
 
 export default function RootLayout({
