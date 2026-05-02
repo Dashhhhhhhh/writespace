@@ -5,6 +5,7 @@ export type NecCitation = {
   edition: string;
   section: string;
   title?: string;
+  url?: string;
 };
 
 export type NecSection = NecCitation & {
@@ -122,6 +123,37 @@ export async function loadNecSections(edition: string) {
   }
 
   return normalizedSections;
+}
+
+export async function findNecSection(edition: string, section: string) {
+  const sections = await loadNecSections(edition);
+  const normalizedSection = section.trim().toLowerCase();
+  const exactMatch = sections.find(
+    (candidate) => candidate.section.toLowerCase() === normalizedSection,
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const parentSection = section.trim().replace(/\([A-Za-z0-9]+\).*$/, "");
+
+  if (parentSection && parentSection !== section.trim()) {
+    return (
+      sections.find(
+        (candidate) =>
+          candidate.section.toLowerCase() === parentSection.toLowerCase(),
+      ) ?? null
+    );
+  }
+
+  return null;
+}
+
+export function buildNecSectionUrl(citation: Pick<NecCitation, "edition" | "section">) {
+  return `/nec/${encodeURIComponent(citation.edition)}/${encodeURIComponent(
+    citation.section,
+  )}`;
 }
 
 async function fetchRemoteIndex(indexUrl: string) {

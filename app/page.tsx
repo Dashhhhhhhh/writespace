@@ -8,6 +8,7 @@ type Citation = {
   edition: string;
   section: string;
   title?: string;
+  url?: string;
 };
 
 type ChatMessage = {
@@ -64,6 +65,7 @@ function normalizeMessages(value: unknown): ChatMessage[] {
               const edition = String(citationCandidate.edition ?? "").trim();
               const section = String(citationCandidate.section ?? "").trim();
               const title = String(citationCandidate.title ?? "").trim();
+              const url = String(citationCandidate.url ?? "").trim();
 
               if (!edition || !section) {
                 return null;
@@ -73,6 +75,7 @@ function normalizeMessages(value: unknown): ChatMessage[] {
                 edition,
                 section,
                 title: title || undefined,
+                url: url || undefined,
               };
             })
             .filter((citation): citation is Citation => citation !== null)
@@ -299,13 +302,19 @@ export default function Home() {
                     {message.citations && message.citations.length > 0 ? (
                       <div className="citation-list" aria-label="Citations">
                         {message.citations.map((citation) => (
-                          <span
+                          <a
                             className="citation-chip"
                             key={`${citation.edition}-${citation.section}`}
+                            href={
+                              citation.url ??
+                              `/nec/${encodeURIComponent(citation.edition)}/${encodeURIComponent(citation.section)}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
                           >
                             NEC {citation.edition} {citation.section}
                             {citation.title ? ` · ${citation.title}` : ""}
-                          </span>
+                          </a>
                         ))}
                       </div>
                     ) : null}

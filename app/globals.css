@@ -310,6 +310,12 @@ h2 {
   font-size: 0.83rem;
   font-weight: 760;
   overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.citation-chip:hover {
+  border-color: var(--accent);
+  background: #ccece5;
 }
 
 .error-message {
@@ -369,6 +375,82 @@ h2 {
   border: 0;
 }
 
+.section-shell {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.section-document {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.back-link {
+  display: inline-flex;
+  margin-bottom: 22px;
+  color: var(--accent-strong);
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.section-document h1 {
+  margin-bottom: 12px;
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 0.98;
+}
+
+.section-document h2 {
+  margin-bottom: 22px;
+  color: var(--muted);
+  font-size: 1.15rem;
+  line-height: 1.45;
+}
+
+.section-note {
+  padding: 12px 14px;
+  border: 1px solid #e3c89e;
+  border-radius: 6px;
+  background: #fff7e8;
+  color: var(--warning);
+  line-height: 1.5;
+}
+
+.section-text {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.section-text p {
+  margin: 0;
+  color: var(--text);
+  font-family:
+    ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 1.04rem;
+  line-height: 1.72;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.section-footer {
+  margin: 28px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 14px;
@@ -401,5 +483,13 @@ h2 {
 
   .composer .primary-button {
     width: 100%;
+  }
+
+  .section-shell {
+    padding: 14px;
+  }
+
+  .section-document {
+    padding: 20px;
   }
 }

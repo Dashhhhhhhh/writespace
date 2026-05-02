@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getNecEdition,
+  buildNecSectionUrl,
   loadNecSections,
   retrieveNecSections,
   type NecCitation,
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
     edition,
     section,
     title,
+    url: buildNecSectionUrl({ edition, section }),
   }));
 
   const openAiResponse = await fetch(OPENAI_RESPONSES_URL, {
