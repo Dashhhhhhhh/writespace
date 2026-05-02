@@ -225,7 +225,7 @@ export default function Home() {
         <header className="app-header">
           <div>
             <p className="eyebrow">NFPA 70 reference assistant</p>
-            <h1>NEC Chat</h1>
+            <h1>NEC</h1>
           </div>
 
           <div className="header-actions" aria-label="Chat settings">
@@ -246,31 +246,7 @@ export default function Home() {
         </header>
 
         <div className="content-grid">
-          <aside className="reference-panel" aria-label="Reference guardrails">
-            <h2>Answer Rules</h2>
-            <p>
-              Answers are constrained to the licensed NEC index configured on the
-              server. If the matching sections are missing or inconclusive, the
-              assistant should say so instead of guessing.
-            </p>
-
-            <div className="status-list">
-              <div>
-                <span className="status-dot" />
-                <p>Cites exact NEC sections</p>
-              </div>
-              <div>
-                <span className="status-dot" />
-                <p>Summarizes instead of quoting long code text</p>
-              </div>
-              <div>
-                <span className="status-dot" />
-                <p>Flags AHJ, listing, and local amendment dependencies</p>
-              </div>
-            </div>
-          </aside>
-
-          <section className="chat-panel" aria-label="NEC chat">
+          <section className="chat-panel" aria-label="NEC">
             <div className="message-list">
               {messages.length === 0 ? (
                 <div className="empty-state">
@@ -299,7 +275,7 @@ export default function Home() {
                     key={message.id}
                   >
                     <div className="message-meta">
-                      {message.role === "assistant" ? "NEC Chat" : "You"}
+                      {message.role === "assistant" ? "NEC" : "You"}
                     </div>
                     <p>{message.content}</p>
                     {message.citations && message.citations.length > 0 ? (
@@ -327,7 +303,7 @@ export default function Home() {
 
               {isLoading ? (
                 <article className="message message-assistant message-loading">
-                  <div className="message-meta">NEC Chat</div>
+                  <div className="message-meta">NEC</div>
                   <p>Checking the licensed NEC index...</p>
                 </article>
               ) : null}
@@ -360,7 +336,7 @@ export default function Home() {
         </div>
 
         <footer className="app-footer">
-          NEC Chat is technical assistance, not legal advice. Verify final
+          NEC is technical assistance, not legal advice. Verify final
           interpretations with the authority having jurisdiction and the adopted
           local edition.
         </footer>

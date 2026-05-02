@@ -1,4 +1,4 @@
-# NEC Chat
+# NEC
 
 A Next.js chat interface for asking questions about NFPA 70, the National
 Electrical Code. The app answers from a local licensed NEC retrieval index and

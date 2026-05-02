@@ -65,7 +65,6 @@ button:disabled {
 
 .app-header,
 .chat-panel,
-.reference-panel,
 .app-footer {
   border: 1px solid var(--border);
   background: var(--surface);
@@ -135,50 +134,15 @@ h2 {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(230px, 0.34fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   min-height: 0;
 }
 
-.reference-panel {
-  align-self: start;
-  padding: 20px;
-  border-radius: 8px;
-}
-
-.reference-panel p,
 .app-footer {
   color: var(--muted);
   font-size: 0.94rem;
   line-height: 1.6;
-}
-
-.status-list {
-  display: grid;
-  gap: 12px;
-  margin-top: 22px;
-}
-
-.status-list div {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-}
-
-.status-list p {
-  margin: 0;
-  color: var(--text);
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.status-dot {
-  width: 9px;
-  height: 9px;
-  margin-top: 5px;
-  border-radius: 999px;
-  background: var(--accent);
 }
 
 .chat-panel {
@@ -498,10 +462,6 @@ h2 {
 
   .content-grid {
     grid-template-columns: 1fr;
-  }
-
-  .reference-panel {
-    order: 2;
   }
 
   .chat-panel {
