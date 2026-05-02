@@ -8,6 +8,7 @@ pnpm-debug.log*
 .DS_Store
 data/nec/source/
 data/nec/index/
+public/nec-pdf/
 .env*.local
 .playwright-cli/
 .vercel

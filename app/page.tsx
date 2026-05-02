@@ -9,6 +9,7 @@ type Citation = {
   section: string;
   title?: string;
   url?: string;
+  page?: number;
 };
 
 type ChatMessage = {
@@ -66,6 +67,7 @@ function normalizeMessages(value: unknown): ChatMessage[] {
               const section = String(citationCandidate.section ?? "").trim();
               const title = String(citationCandidate.title ?? "").trim();
               const url = String(citationCandidate.url ?? "").trim();
+              const page = Number(citationCandidate.page);
 
               if (!edition || !section) {
                 return null;
@@ -76,6 +78,7 @@ function normalizeMessages(value: unknown): ChatMessage[] {
                 section,
                 title: title || undefined,
                 url: url || undefined,
+                page: Number.isFinite(page) && page > 0 ? page : undefined,
               };
             })
             .filter((citation): citation is Citation => citation !== null)

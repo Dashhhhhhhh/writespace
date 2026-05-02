@@ -16,12 +16,13 @@ const outputPath = resolvePath(
   process.env.NEC_INDEX_PATH?.trim() || `data/nec/index/nec-${edition}.json`,
 );
 
+const pageMarkerPattern = /@@PDF_PAGE:(\d+)@@/g;
 const sectionPattern =
   /(?:^|\n)\s*(?<section>\d{3}(?:\.\d+)?(?:\([A-Za-z0-9]+\))*)\s+(?<title>[^\n]+)\n(?<body>[\s\S]*?)(?=\n\s*\d{3}(?:\.\d+)?(?:\([A-Za-z0-9]+\))*\s+[^\n]+\n|$)/g;
 
 try {
   const rawText = await readSourceText(sourcePath);
-  const normalizedText = rawText
+  const normalizedText = addPageMarkers(rawText)
     .replace(/\r\n?/g, "\n")
     .replace(/\f/g, "\n")
     .replace(/\u00a0/g, " ")
@@ -33,6 +34,7 @@ try {
     const section = match.groups?.section?.trim();
     const title = cleanTitle(cleanLine(match.groups?.title ?? ""));
     const text = cleanSectionText(section ?? "", cleanBody(match.groups?.body ?? ""));
+    const page = getPageForOffset(normalizedText, match.index ?? 0);
 
     if (!section || !title || !text || shouldSkipSection(section, title, text)) {
       continue;
@@ -43,6 +45,7 @@ try {
       section,
       title,
       text,
+      page,
     });
   }
 
@@ -84,6 +87,34 @@ async function readSourceText(value) {
   }
 
   return fs.readFile(value, "utf8");
+}
+
+function addPageMarkers(value) {
+  if (!sourcePath.toLowerCase().endsWith(".pdf")) {
+    return value;
+  }
+
+  return value
+    .split("\f")
+    .map((page, index) => `\n@@PDF_PAGE:${index + 1}@@\n${page}`)
+    .join("\n");
+}
+
+function getPageForOffset(value, offset) {
+  let page = 1;
+  let match;
+
+  pageMarkerPattern.lastIndex = 0;
+
+  while ((match = pageMarkerPattern.exec(value))) {
+    if (match.index > offset) {
+      break;
+    }
+
+    page = Number(match[1]);
+  }
+
+  return page;
 }
 
 function resolvePath(value) {
@@ -420,6 +451,7 @@ function shouldSkipSection(section, title, text) {
 function isBoilerplateLine(value) {
   return (
     value.length === 0 ||
+    /^@@PDF_PAGE:\d+@@$/.test(value) ||
     /^Copyright/i.test(value) ||
     /^For inquiries contact/i.test(value) ||
     /^EDUFIRE\.IR/i.test(value) ||

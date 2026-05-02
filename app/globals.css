@@ -425,6 +425,37 @@ h2 {
   line-height: 1.5;
 }
 
+.pdf-callout {
+  display: grid;
+  gap: 4px;
+  margin: 18px 0;
+  padding: 12px 14px;
+  border: 1px solid #a8d6ce;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  line-height: 1.45;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: min(78vh, 980px);
+  min-height: 620px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.section-text-fallback {
+  margin-top: 18px;
+}
+
+.section-text-fallback summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-weight: 760;
+}
+
 .section-text {
   display: grid;
   gap: 14px;

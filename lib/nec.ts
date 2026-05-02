@@ -6,10 +6,12 @@ export type NecCitation = {
   section: string;
   title?: string;
   url?: string;
+  page?: number;
 };
 
 export type NecSection = NecCitation & {
   text: string;
+  page?: number;
 };
 
 export type NecMatch = NecSection & {
@@ -106,12 +108,14 @@ export async function loadNecSections(edition: string) {
 
       const title = String(candidate.title ?? "").trim();
       const sectionEdition = String(candidate.edition ?? fallbackEdition).trim();
+      const page = Number(candidate.page);
 
       return {
         edition: sectionEdition || edition,
         section: sectionId,
         title: title || undefined,
         text,
+        page: Number.isFinite(page) && page > 0 ? page : undefined,
       };
     })
     .filter((section): section is NecSection => section !== null);

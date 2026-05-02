@@ -87,10 +87,11 @@ export async function POST(request: Request) {
     });
   }
 
-  const allowedCitations = matches.map(({ edition, section, title }) => ({
+  const allowedCitations = matches.map(({ edition, section, title, page }) => ({
     edition,
     section,
     title,
+    page,
     url: buildNecSectionUrl({ edition, section }),
   }));
 
