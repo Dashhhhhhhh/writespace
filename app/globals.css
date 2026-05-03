@@ -12,7 +12,8 @@
   --accent-soft: #dff3ef;
   --warning: #8a4b0f;
   --danger: #b3261e;
-  --shadow: 0 24px 70px rgba(23, 32, 26, 0.12);
+  --shadow: 0 24px 70px rgba(23, 32, 26, 0.1);
+  --soft-shadow: 0 14px 36px rgba(23, 32, 26, 0.08);
 }
 
 * {
@@ -26,7 +27,9 @@ body {
 }
 
 body {
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(244, 246, 241, 0.94)),
+    var(--bg);
   color: var(--text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -51,15 +54,15 @@ button:disabled {
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: clamp(12px, 2.2vw, 24px);
 }
 
 .chat-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 18px;
-  min-height: calc(100vh - 48px);
-  max-width: 1280px;
+  gap: 12px;
+  min-height: calc(100vh - clamp(24px, 4.4vw, 48px));
+  max-width: 1100px;
   margin: 0 auto;
 }
 
@@ -67,17 +70,18 @@ button:disabled {
 .chat-panel,
 .app-footer {
   border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--soft-shadow);
 }
 
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 20px 22px;
-  border-radius: 8px;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
 }
 
 .eyebrow {
@@ -97,8 +101,8 @@ p {
 
 h1 {
   margin-bottom: 0;
-  font-size: clamp(2rem, 4vw, 3.8rem);
-  line-height: 0.95;
+  font-size: clamp(1.8rem, 3.2vw, 3rem);
+  line-height: 1;
 }
 
 h2 {
@@ -111,7 +115,7 @@ h2 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .edition-control {
@@ -124,10 +128,10 @@ h2 {
 }
 
 .edition-control select {
-  min-height: 40px;
-  padding: 0 34px 0 12px;
+  min-height: 36px;
+  padding: 0 30px 0 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--surface);
   color: var(--text);
 }
@@ -148,33 +152,38 @@ h2 {
 .chat-panel {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto;
-  min-height: 70vh;
-  border-radius: 8px;
+  min-height: 0;
+  border-radius: 18px;
   overflow: hidden;
+  backdrop-filter: blur(14px);
 }
 
 .message-list {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   overflow: auto;
-  padding: 20px;
+  padding: clamp(14px, 2.2vw, 26px);
+  scroll-padding-bottom: 120px;
 }
 
 .empty-state {
   display: grid;
-  gap: 14px;
-  max-width: 760px;
-  padding: 32px 12px;
+  gap: 16px;
+  width: min(760px, 100%);
+  justify-self: center;
+  padding: clamp(30px, 9vh, 96px) 4px;
+  text-align: center;
 }
 
 .empty-state h2 {
   margin: 0;
-  font-size: clamp(1.7rem, 4vw, 3.2rem);
+  font-size: clamp(2.2rem, 7vw, 5rem);
   line-height: 1;
 }
 
 .empty-state p {
+  justify-self: center;
   max-width: 620px;
   color: var(--muted);
   line-height: 1.6;
@@ -183,15 +192,16 @@ h2 {
 .example-list {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
 }
 
 .example-button,
 .secondary-button,
 .primary-button {
-  min-height: 42px;
+  min-height: 40px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 0 14px;
   font-weight: 750;
 }
@@ -213,21 +223,25 @@ h2 {
 }
 
 .message {
-  width: min(820px, 100%);
-  padding: 15px 16px;
+  width: min(780px, 100%);
+  padding: 14px 15px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 18px;
   background: var(--surface);
+  box-shadow: 0 8px 18px rgba(23, 32, 26, 0.04);
 }
 
 .message-user {
   justify-self: end;
   background: var(--surface-strong);
   color: #ffffff;
+  border-color: var(--surface-strong);
+  border-bottom-right-radius: 6px;
 }
 
 .message-assistant {
   justify-self: start;
+  border-bottom-left-radius: 6px;
 }
 
 .message-loading {
@@ -236,7 +250,7 @@ h2 {
 
 .message-meta {
   margin-bottom: 8px;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -292,22 +306,26 @@ h2 {
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
   border-top: 1px solid var(--border);
-  background: var(--surface-muted);
+  background: rgba(238, 241, 235, 0.78);
+  backdrop-filter: blur(14px);
 }
 
 .composer textarea {
   width: 100%;
-  min-height: 74px;
-  max-height: 220px;
-  resize: vertical;
+  min-height: 48px;
+  max-height: 160px;
+  resize: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 14px;
+  border-radius: 18px;
+  padding: 13px 15px;
   color: var(--text);
   outline: none;
+  line-height: 1.35;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .composer textarea:focus,
@@ -318,13 +336,16 @@ h2 {
 
 .composer .primary-button {
   align-self: end;
-  min-width: 98px;
+  min-width: 78px;
+  min-height: 48px;
+  border-radius: 18px;
 }
 
 .app-footer {
-  padding: 14px 18px;
-  border-radius: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
   box-shadow: none;
+  text-align: center;
 }
 
 .sr-only {
@@ -448,32 +469,45 @@ h2 {
 
 @media (max-width: 860px) {
   .app-shell {
-    padding: 14px;
+    padding: 10px;
   }
 
   .chat-shell {
-    min-height: calc(100vh - 28px);
+    min-height: calc(100vh - 20px);
+    gap: 10px;
   }
 
   .app-header {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    padding: 12px;
   }
 
-  .content-grid {
-    grid-template-columns: 1fr;
+  .eyebrow {
+    display: none;
   }
 
-  .chat-panel {
-    min-height: 68vh;
+  h1 {
+    font-size: 1.7rem;
   }
 
   .composer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px;
   }
 
   .composer .primary-button {
-    width: 100%;
+    width: auto;
+    min-width: 64px;
+    padding: 0 12px;
+  }
+
+  .message {
+    width: min(92%, 780px);
+  }
+
+  .app-footer {
+    display: none;
   }
 
   .section-shell {

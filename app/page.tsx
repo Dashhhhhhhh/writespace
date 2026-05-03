@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Role = "user" | "assistant";
 
@@ -142,7 +149,10 @@ export default function Home() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await sendMessage();
+  }
 
+  async function sendMessage() {
     const question = draft.trim();
 
     if (!question || isLoading) {
@@ -209,6 +219,15 @@ export default function Home() {
     }
   }
 
+  function handleDraftKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    void sendMessage();
+  }
+
   function handleExample(question: string) {
     setDraft(question);
   }
@@ -223,7 +242,7 @@ export default function Home() {
     <main className="app-shell">
       <section className="chat-shell">
         <header className="app-header">
-          <div>
+          <div className="brand-block">
             <p className="eyebrow">NFPA 70 reference assistant</p>
             <h1>NEC</h1>
           </div>
@@ -250,7 +269,7 @@ export default function Home() {
             <div className="message-list">
               {messages.length === 0 ? (
                 <div className="empty-state">
-                  <h2>Ask a question about the National Electrical Code.</h2>
+                  <h2>Ask a code question.</h2>
                   <p>
                     Include the occupancy, location, equipment, wiring method,
                     voltage, and any section you already have.
@@ -325,11 +344,12 @@ export default function Home() {
                 id="question"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleDraftKeyDown}
                 placeholder="Ask about a NEC requirement..."
-                rows={3}
+                rows={1}
               />
               <button className="primary-button" type="submit" disabled={!canSend}>
-                {isLoading ? "Searching..." : "Ask"}
+                {isLoading ? "..." : "Send"}
               </button>
             </form>
           </section>
