@@ -364,6 +364,11 @@ export default function Home() {
       messages: nextMessages,
       updatedAt: nowIso(),
     });
+
+    if (!conversation.titleGenerated) {
+      void generateConversationTitle(conversation.id, nextMessages);
+    }
+
     setDraft("");
     setError("");
     setIsLoading(true);
@@ -413,9 +418,6 @@ export default function Home() {
         updatedAt: nowIso(),
       });
 
-      if (!conversation.titleGenerated) {
-        void generateConversationTitle(conversation.id, answeredMessages);
-      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -502,7 +504,7 @@ export default function Home() {
       const nextConversations = exists
         ? currentConversations.map((conversation) =>
             conversation.id === nextConversation.id
-              ? nextConversation
+              ? mergeConversation(conversation, nextConversation)
               : conversation,
           )
         : [nextConversation, ...currentConversations];
@@ -513,6 +515,27 @@ export default function Home() {
           new Date(left.updatedAt).getTime(),
       );
     });
+  }
+
+  function mergeConversation(
+    currentConversation: Conversation,
+    nextConversation: Conversation,
+  ) {
+    const shouldPreserveGeneratedTitle =
+      currentConversation.titleGenerated === true &&
+      nextConversation.titleGenerated !== true &&
+      nextConversation.messages.length >= currentConversation.messages.length &&
+      nextConversation.messages.length > 0;
+
+    if (!shouldPreserveGeneratedTitle) {
+      return nextConversation;
+    }
+
+    return {
+      ...nextConversation,
+      title: currentConversation.title,
+      titleGenerated: true,
+    };
   }
 
   async function generateConversationTitle(

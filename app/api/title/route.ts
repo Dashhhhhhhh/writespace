@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       model: process.env.OPENAI_TITLE_MODEL?.trim() || DEFAULT_MODEL,
-      max_output_tokens: 80,
+      max_output_tokens: 50,
       input: [
         {
           role: "system",
@@ -62,9 +62,10 @@ export async function POST(request: Request) {
               type: "input_text",
               text: [
                 "Name a saved NEC chat.",
-                "Return a concise, specific title with 2 to 6 words.",
+                "Return only a very short, specific summary title with 2 to 4 words.",
+                "Use Title Case.",
                 "Do not use quotes, punctuation at the end, or generic titles like New Chat.",
-                "Prefer code-topic wording such as GFCI Kitchen Receptacles or Service Disconnect Location.",
+                "Prefer code-topic wording such as Kitchen GFCI, Service Disconnects, or NM Damp Locations.",
               ].join(" "),
             },
           ],
@@ -180,5 +181,8 @@ function cleanTitle(value: unknown) {
     .replace(/^["']|["']$/g, "")
     .replace(/[.!?]+$/g, "")
     .replace(/\s+/g, " ")
-    .slice(0, 64);
+    .split(" ")
+    .slice(0, 4)
+    .join(" ")
+    .slice(0, 42);
 }
