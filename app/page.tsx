@@ -26,7 +26,21 @@ type ChatMessage = {
   citations?: Citation[];
 };
 
+type Conversation = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type StoredConversations = {
+  activeConversationId?: unknown;
+  conversations?: unknown;
+};
+
 const STORAGE_KEY = "nec-chat.messages.v1";
+const CONVERSATIONS_STORAGE_KEY = "nec-chat.conversations.v1";
 const DEFAULT_EDITION = "2023";
 const EXAMPLE_QUESTIONS = [
   "Where are GFCI receptacles required in dwelling unit kitchens?",
@@ -40,6 +54,48 @@ function createId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function createConversation(messages: ChatMessage[] = []): Conversation {
+  const timestamp = nowIso();
+
+  return {
+    id: createId(),
+    title: buildConversationTitle(messages),
+    messages,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function buildConversationTitle(messages: ChatMessage[]) {
+  const firstUserMessage = messages.find((message) => message.role === "user");
+  const title = firstUserMessage?.content.trim().replace(/\s+/g, " ") ?? "";
+
+  if (!title) {
+    return "New chat";
+  }
+
+  return title.length > 56 ? `${title.slice(0, 53)}...` : title;
+}
+
+function formatConversationTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Just now";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function normalizeMessages(value: unknown): ChatMessage[] {
@@ -101,8 +157,48 @@ function normalizeMessages(value: unknown): ChatMessage[] {
     .filter((message): message is ChatMessage => message !== null);
 }
 
+function normalizeConversations(value: unknown): Conversation[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((conversation): Conversation | null => {
+      if (!conversation || typeof conversation !== "object") {
+        return null;
+      }
+
+      const candidate = conversation as Record<string, unknown>;
+      const messages = normalizeMessages(candidate.messages);
+      const id = typeof candidate.id === "string" ? candidate.id : createId();
+      const title =
+        typeof candidate.title === "string" && candidate.title.trim()
+          ? candidate.title.trim()
+          : buildConversationTitle(messages);
+      const createdAt =
+        typeof candidate.createdAt === "string" ? candidate.createdAt : nowIso();
+      const updatedAt =
+        typeof candidate.updatedAt === "string" ? candidate.updatedAt : createdAt;
+
+      return {
+        id,
+        title,
+        messages,
+        createdAt,
+        updatedAt,
+      };
+    })
+    .filter((conversation): conversation is Conversation => conversation !== null)
+    .sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() -
+        new Date(left.updatedAt).getTime(),
+    );
+}
+
 export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState("");
   const [draft, setDraft] = useState("");
   const [edition, setEdition] = useState(DEFAULT_EDITION);
   const [error, setError] = useState("");
@@ -110,6 +206,16 @@ export default function Home() {
   const [isHydrated, setIsHydrated] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  const activeConversation =
+    conversations.find((conversation) => conversation.id === activeConversationId) ??
+    conversations[0] ??
+    null;
+  const messages = activeConversation?.messages ?? [];
+  const sortedConversations = [...conversations].sort(
+    (left, right) =>
+      new Date(right.updatedAt).getTime() -
+      new Date(left.updatedAt).getTime(),
+  );
   const canSend = draft.trim().length > 0 && !isLoading;
   const apiMessages = useMemo(
     () =>
@@ -121,15 +227,61 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const storedConversations = window.localStorage.getItem(
+      CONVERSATIONS_STORAGE_KEY,
+    );
 
-    if (stored) {
+    if (storedConversations) {
       try {
-        const parsed = JSON.parse(stored) as unknown;
-        setMessages(normalizeMessages(parsed));
+        const parsed = JSON.parse(storedConversations) as StoredConversations;
+        const normalizedConversations = normalizeConversations(
+          parsed.conversations,
+        );
+        const savedActiveId =
+          typeof parsed.activeConversationId === "string"
+            ? parsed.activeConversationId
+            : "";
+        const activeId = normalizedConversations.some(
+          (conversation) => conversation.id === savedActiveId,
+        )
+          ? savedActiveId
+          : normalizedConversations[0]?.id;
+
+        if (normalizedConversations.length > 0) {
+          setConversations(normalizedConversations);
+          setActiveConversationId(activeId ?? normalizedConversations[0].id);
+        } else {
+          const conversation = createConversation();
+          setConversations([conversation]);
+          setActiveConversationId(conversation.id);
+        }
       } catch {
-        setMessages([]);
+        const conversation = createConversation();
+        setConversations([conversation]);
+        setActiveConversationId(conversation.id);
       }
+
+      setIsHydrated(true);
+      return;
+    }
+
+    const storedMessages = window.localStorage.getItem(STORAGE_KEY);
+
+    if (storedMessages) {
+      try {
+        const migratedMessages = normalizeMessages(JSON.parse(storedMessages));
+        const conversation = createConversation(migratedMessages);
+        setConversations([conversation]);
+        setActiveConversationId(conversation.id);
+      } catch {
+        const conversation = createConversation();
+        setConversations([conversation]);
+        setActiveConversationId(conversation.id);
+      }
+    } else {
+      const conversation = createConversation();
+      setConversations([conversation]);
+      setActiveConversationId(conversation.id);
     }
 
     setIsHydrated(true);
@@ -140,8 +292,11 @@ export default function Home() {
       return;
     }
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  }, [isHydrated, messages]);
+    window.localStorage.setItem(
+      CONVERSATIONS_STORAGE_KEY,
+      JSON.stringify({ conversations, activeConversationId }),
+    );
+  }, [activeConversationId, conversations, isHydrated]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -159,14 +314,21 @@ export default function Home() {
       return;
     }
 
+    const conversation = activeConversation ?? createConversation();
     const userMessage: ChatMessage = {
       id: createId(),
       role: "user",
       content: question,
     };
-    const nextMessages = [...messages, userMessage];
+    const nextMessages = [...conversation.messages, userMessage];
 
-    setMessages(nextMessages);
+    setActiveConversationId(conversation.id);
+    upsertConversation({
+      ...conversation,
+      title: buildConversationTitle(nextMessages),
+      messages: nextMessages,
+      updatedAt: nowIso(),
+    });
     setDraft("");
     setError("");
     setIsLoading(true);
@@ -199,15 +361,19 @@ export default function Home() {
         throw new Error("The NEC chat response was empty.");
       }
 
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        {
-          id: createId(),
-          role: "assistant",
-          content: answer,
-          citations: Array.isArray(payload.citations) ? payload.citations : [],
-        },
-      ]);
+      const assistantMessage: ChatMessage = {
+        id: createId(),
+        role: "assistant",
+        content: answer,
+        citations: Array.isArray(payload.citations) ? payload.citations : [],
+      };
+
+      upsertConversation({
+        ...conversation,
+        title: buildConversationTitle(nextMessages),
+        messages: [...nextMessages, assistantMessage],
+        updatedAt: nowIso(),
+      });
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -232,10 +398,78 @@ export default function Home() {
     setDraft(question);
   }
 
+  function handleNewChat() {
+    const conversation = createConversation();
+
+    setConversations((currentConversations) => [
+      conversation,
+      ...currentConversations,
+    ]);
+    setActiveConversationId(conversation.id);
+    setDraft("");
+    setError("");
+  }
+
+  function handleSelectConversation(conversationId: string) {
+    setActiveConversationId(conversationId);
+    setDraft("");
+    setError("");
+  }
+
+  function handleDeleteConversation(conversationId: string) {
+    setConversations((currentConversations) => {
+      const remainingConversations = currentConversations.filter(
+        (conversation) => conversation.id !== conversationId,
+      );
+
+      if (remainingConversations.length === 0) {
+        const replacement = createConversation();
+        setActiveConversationId(replacement.id);
+        return [replacement];
+      }
+
+      if (conversationId === activeConversationId) {
+        setActiveConversationId(remainingConversations[0].id);
+      }
+
+      return remainingConversations;
+    });
+  }
+
   function handleClear() {
-    setMessages([]);
+    if (!activeConversation) {
+      return;
+    }
+
+    upsertConversation({
+      ...activeConversation,
+      title: "New chat",
+      messages: [],
+      updatedAt: nowIso(),
+    });
     setError("");
     setDraft("");
+  }
+
+  function upsertConversation(nextConversation: Conversation) {
+    setConversations((currentConversations) => {
+      const exists = currentConversations.some(
+        (conversation) => conversation.id === nextConversation.id,
+      );
+      const nextConversations = exists
+        ? currentConversations.map((conversation) =>
+            conversation.id === nextConversation.id
+              ? nextConversation
+              : conversation,
+          )
+        : [nextConversation, ...currentConversations];
+
+      return nextConversations.sort(
+        (left, right) =>
+          new Date(right.updatedAt).getTime() -
+          new Date(left.updatedAt).getTime(),
+      );
+    });
   }
 
   return (
@@ -265,6 +499,49 @@ export default function Home() {
         </header>
 
         <div className="content-grid">
+          <aside className="history-panel" aria-label="Saved chats">
+            <div className="history-header">
+              <span>Chats</span>
+              <button
+                className="new-chat-button"
+                type="button"
+                onClick={handleNewChat}
+              >
+                New
+              </button>
+            </div>
+
+            <div className="history-list">
+              {sortedConversations.map((conversation) => {
+                const isActive = conversation.id === activeConversationId;
+
+                return (
+                  <div
+                    className={`history-item${isActive ? " history-item-active" : ""}`}
+                    key={conversation.id}
+                  >
+                    <button
+                      className="history-open"
+                      type="button"
+                      onClick={() => handleSelectConversation(conversation.id)}
+                    >
+                      <span>{conversation.title}</span>
+                      <small>{formatConversationTime(conversation.updatedAt)}</small>
+                    </button>
+                    <button
+                      className="history-delete"
+                      type="button"
+                      aria-label={`Delete ${conversation.title}`}
+                      onClick={() => handleDeleteConversation(conversation.id)}
+                    >
+                      <span aria-hidden="true">&times;</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
+
           <section className="chat-panel" aria-label="NEC">
             <div className="message-list">
               {messages.length === 0 ? (
