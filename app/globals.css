@@ -20,28 +20,6 @@
   --focus-ring: rgba(13, 118, 110, 0.12);
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #0d1210;
-  --surface: #141b17;
-  --surface-muted: #1a231f;
-  --surface-strong: #e8f0e8;
-  --panel: rgba(18, 25, 21, 0.9);
-  --panel-muted: rgba(20, 30, 26, 0.82);
-  --border: #293730;
-  --text: #eef5ee;
-  --muted: #9caaa0;
-  --accent: #35b8a8;
-  --accent-strong: #77ddd0;
-  --accent-soft: #173a35;
-  --warning: #f1bc70;
-  --danger: #ff938d;
-  --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
-  --soft-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
-  --message-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
-  --focus-ring: rgba(53, 184, 168, 0.18);
-}
-
 * {
   box-sizing: border-box;
 }
@@ -61,13 +39,6 @@ body {
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-}
-
-:root[data-theme="dark"] body {
-  background:
-    linear-gradient(135deg, rgba(53, 184, 168, 0.13), transparent 36%),
-    linear-gradient(180deg, rgba(13, 18, 16, 0.96), rgba(10, 14, 12, 0.98)),
-    var(--bg);
 }
 
 button,
@@ -93,7 +64,7 @@ button:disabled {
 
 .chat-shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   min-height: calc(100vh - clamp(24px, 4.4vw, 48px));
   max-width: 1100px;
@@ -101,8 +72,7 @@ button:disabled {
 }
 
 .app-header,
-.chat-panel,
-.app-footer {
+.chat-panel {
   border: 1px solid var(--border);
   background: var(--panel);
   box-shadow: var(--soft-shadow);
@@ -211,12 +181,6 @@ h2 {
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
-}
-
-.app-footer {
-  color: var(--muted);
-  font-size: 0.94rem;
-  line-height: 1.6;
 }
 
 .history-panel {
@@ -461,10 +425,6 @@ h2 {
   color: #b8d6c9;
 }
 
-:root[data-theme="dark"] .message-user .message-meta {
-  color: #315f58;
-}
-
 .message p {
   margin: 0;
   line-height: 1.58;
@@ -544,59 +504,6 @@ h2 {
   min-width: 78px;
   min-height: 48px;
   border-radius: 18px;
-}
-
-.app-footer {
-  padding: 10px 14px;
-  border-radius: 14px;
-  box-shadow: none;
-  text-align: center;
-}
-
-.theme-toggle {
-  position: fixed;
-  right: clamp(14px, 2.2vw, 24px);
-  bottom: clamp(14px, 2.2vw, 24px);
-  z-index: 20;
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel);
-  box-shadow: var(--soft-shadow);
-  color: var(--text);
-  backdrop-filter: blur(14px);
-}
-
-.theme-toggle:hover {
-  border-color: var(--accent);
-}
-
-.theme-toggle-icon {
-  position: relative;
-  display: block;
-  width: 22px;
-  height: 22px;
-  border: 2px solid currentColor;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.theme-toggle-icon::after {
-  position: absolute;
-  inset: -4px -10px -4px 9px;
-  border-radius: 999px;
-  background: var(--panel);
-  content: "";
-  transform: scaleX(0);
-  transform-origin: right;
-  transition: transform 160ms ease;
-}
-
-:root[data-theme="dark"] .theme-toggle-icon::after {
-  transform: scaleX(1);
 }
 
 .sr-only {
@@ -776,10 +683,6 @@ h2 {
 
   .message {
     width: min(92%, 780px);
-  }
-
-  .app-footer {
-    display: none;
   }
 
   .section-shell {

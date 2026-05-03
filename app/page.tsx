@@ -40,11 +40,8 @@ type StoredConversations = {
   conversations?: unknown;
 };
 
-type Theme = "light" | "dark";
-
 const STORAGE_KEY = "nec-chat.messages.v1";
 const CONVERSATIONS_STORAGE_KEY = "nec-chat.conversations.v1";
-const THEME_STORAGE_KEY = "nec-chat.theme.v1";
 const DEFAULT_EDITION = "2023";
 const EXAMPLE_QUESTIONS = [
   {
@@ -219,7 +216,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
-  const [theme, setTheme] = useState<Theme>("light");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeConversation =
@@ -243,13 +239,6 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-
-    if (storedTheme === "dark" || storedTheme === "light") {
-      setTheme(storedTheme);
-      document.documentElement.dataset.theme = storedTheme;
-    }
-
     const storedConversations = window.localStorage.getItem(
       CONVERSATIONS_STORAGE_KEY,
     );
@@ -320,14 +309,6 @@ export default function Home() {
       JSON.stringify({ conversations, activeConversationId }),
     );
   }, [activeConversationId, conversations, isHydrated]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-
-    if (isHydrated) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }
-  }, [isHydrated, theme]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -751,21 +732,7 @@ export default function Home() {
             </form>
           </section>
         </div>
-
-        <footer className="app-footer">
-          Technical assistance only. Verify final interpretations with the AHJ.
-        </footer>
       </section>
-
-      <button
-        className="theme-toggle"
-        type="button"
-        aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-        aria-pressed={theme === "dark"}
-        onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
-      >
-        <span className="theme-toggle-icon" aria-hidden="true" />
-      </button>
     </main>
   );
 }
