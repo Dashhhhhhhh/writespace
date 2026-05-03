@@ -29,6 +29,7 @@ type ChatMessage = {
 type Conversation = {
   id: string;
   title: string;
+  titleGenerated?: boolean;
   messages: ChatMessage[];
   createdAt: string;
   updatedAt: string;
@@ -39,13 +40,25 @@ type StoredConversations = {
   conversations?: unknown;
 };
 
+type Theme = "light" | "dark";
+
 const STORAGE_KEY = "nec-chat.messages.v1";
 const CONVERSATIONS_STORAGE_KEY = "nec-chat.conversations.v1";
+const THEME_STORAGE_KEY = "nec-chat.theme.v1";
 const DEFAULT_EDITION = "2023";
 const EXAMPLE_QUESTIONS = [
-  "Where are GFCI receptacles required in dwelling unit kitchens?",
-  "What does the NEC require for service disconnect location?",
-  "Can NM cable be installed in a damp location?",
+  {
+    label: "Kitchen GFCI",
+    question: "Where are GFCI receptacles required in dwelling unit kitchens?",
+  },
+  {
+    label: "Service disconnects",
+    question: "What does the NEC require for service disconnect location?",
+  },
+  {
+    label: "Damp locations",
+    question: "Can NM cable be installed in a damp location?",
+  },
 ];
 
 function createId() {
@@ -66,6 +79,7 @@ function createConversation(messages: ChatMessage[] = []): Conversation {
   return {
     id: createId(),
     title: buildConversationTitle(messages),
+    titleGenerated: false,
     messages,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -183,6 +197,7 @@ function normalizeConversations(value: unknown): Conversation[] {
       return {
         id,
         title,
+        titleGenerated: candidate.titleGenerated === true,
         messages,
         createdAt,
         updatedAt,
@@ -204,6 +219,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [theme, setTheme] = useState<Theme>("light");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeConversation =
@@ -227,6 +243,13 @@ export default function Home() {
   );
 
   useEffect(() => {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+
+    if (storedTheme === "dark" || storedTheme === "light") {
+      setTheme(storedTheme);
+      document.documentElement.dataset.theme = storedTheme;
+    }
+
     const storedConversations = window.localStorage.getItem(
       CONVERSATIONS_STORAGE_KEY,
     );
@@ -299,6 +322,14 @@ export default function Home() {
   }, [activeConversationId, conversations, isHydrated]);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+
+    if (isHydrated) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [isHydrated, theme]);
+
+  useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, isLoading]);
 
@@ -321,11 +352,15 @@ export default function Home() {
       content: question,
     };
     const nextMessages = [...conversation.messages, userMessage];
+    const nextTitle = conversation.titleGenerated
+      ? conversation.title
+      : buildConversationTitle(nextMessages);
 
     setActiveConversationId(conversation.id);
     upsertConversation({
       ...conversation,
-      title: buildConversationTitle(nextMessages),
+      title: nextTitle,
+      titleGenerated: conversation.titleGenerated ?? false,
       messages: nextMessages,
       updatedAt: nowIso(),
     });
@@ -368,12 +403,19 @@ export default function Home() {
         citations: Array.isArray(payload.citations) ? payload.citations : [],
       };
 
+      const answeredMessages = [...nextMessages, assistantMessage];
+
       upsertConversation({
         ...conversation,
-        title: buildConversationTitle(nextMessages),
-        messages: [...nextMessages, assistantMessage],
+        title: nextTitle,
+        titleGenerated: conversation.titleGenerated ?? false,
+        messages: answeredMessages,
         updatedAt: nowIso(),
       });
+
+      if (!conversation.titleGenerated) {
+        void generateConversationTitle(conversation.id, answeredMessages);
+      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -444,6 +486,7 @@ export default function Home() {
     upsertConversation({
       ...activeConversation,
       title: "New chat",
+      titleGenerated: false,
       messages: [],
       updatedAt: nowIso(),
     });
@@ -472,13 +515,68 @@ export default function Home() {
     });
   }
 
+  async function generateConversationTitle(
+    conversationId: string,
+    titleMessages: ChatMessage[],
+  ) {
+    try {
+      const response = await fetch("/api/title", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: titleMessages.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        title?: unknown;
+      };
+      const title =
+        typeof payload.title === "string" ? payload.title.trim() : "";
+
+      if (!response.ok || !title) {
+        return;
+      }
+
+      setConversations((currentConversations) =>
+        currentConversations
+          .map((conversation) =>
+            conversation.id === conversationId
+              ? {
+                  ...conversation,
+                  title,
+                  titleGenerated: true,
+                }
+              : conversation,
+          )
+          .sort(
+            (left, right) =>
+              new Date(right.updatedAt).getTime() -
+              new Date(left.updatedAt).getTime(),
+          ),
+      );
+    } catch {
+      // The fallback title is already useful enough if naming fails.
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="chat-shell">
         <header className="app-header">
           <div className="brand-block">
-            <p className="eyebrow">NFPA 70 reference assistant</p>
-            <h1>NEC</h1>
+            <div className="brand-mark" aria-hidden="true">
+              NEC
+            </div>
+            <div>
+              <h1>NEC</h1>
+              <span>{activeConversation?.title ?? "New chat"}</span>
+            </div>
           </div>
 
           <div className="header-actions" aria-label="Chat settings">
@@ -546,20 +644,19 @@ export default function Home() {
             <div className="message-list">
               {messages.length === 0 ? (
                 <div className="empty-state">
-                  <h2>Ask a code question.</h2>
-                  <p>
-                    Include the occupancy, location, equipment, wiring method,
-                    voltage, and any section you already have.
-                  </p>
+                  <div className="empty-mark" aria-hidden="true">
+                    70
+                  </div>
+                  <h2>Ask NEC</h2>
                   <div className="example-list" aria-label="Example questions">
-                    {EXAMPLE_QUESTIONS.map((question) => (
+                    {EXAMPLE_QUESTIONS.map((example) => (
                       <button
                         className="example-button"
-                        key={question}
+                        key={example.label}
                         type="button"
-                        onClick={() => handleExample(question)}
+                        onClick={() => handleExample(example.question)}
                       >
-                        {question}
+                        {example.label}
                       </button>
                     ))}
                   </div>
@@ -600,7 +697,7 @@ export default function Home() {
               {isLoading ? (
                 <article className="message message-assistant message-loading">
                   <div className="message-meta">NEC</div>
-                  <p>Checking the licensed NEC index...</p>
+                  <p>Checking the index...</p>
                 </article>
               ) : null}
 
@@ -633,11 +730,19 @@ export default function Home() {
         </div>
 
         <footer className="app-footer">
-          NEC is technical assistance, not legal advice. Verify final
-          interpretations with the authority having jurisdiction and the adopted
-          local edition.
+          Technical assistance only. Verify final interpretations with the AHJ.
         </footer>
       </section>
+
+      <button
+        className="theme-toggle"
+        type="button"
+        aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        aria-pressed={theme === "dark"}
+        onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+      >
+        <span className="theme-toggle-icon" aria-hidden="true" />
+      </button>
     </main>
   );
 }
