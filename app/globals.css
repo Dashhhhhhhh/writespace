@@ -183,6 +183,10 @@ h2 {
   min-height: 0;
 }
 
+.content-grid-history-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
 .history-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -196,9 +200,9 @@ h2 {
 }
 
 .history-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 12px;
   border-bottom: 1px solid var(--border);
@@ -207,6 +211,41 @@ h2 {
   font-weight: 820;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.history-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-title-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-collapse-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 860;
+  line-height: 1;
+}
+
+.history-collapse-button:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .new-chat-button {
@@ -234,6 +273,31 @@ h2 {
   min-height: 0;
   overflow: auto;
   padding: 10px;
+}
+
+.history-list[hidden] {
+  display: none;
+}
+
+.history-panel-collapsed {
+  grid-template-rows: auto;
+}
+
+.history-panel-collapsed .history-header {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 10px 8px;
+}
+
+.history-panel-collapsed .history-title-row {
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.history-panel-collapsed .new-chat-button {
+  width: 100%;
+  padding: 0 8px;
 }
 
 .history-item {
@@ -349,14 +413,6 @@ h2 {
   line-height: 1;
 }
 
-.example-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-.example-button,
 .secondary-button,
 .primary-button {
   min-height: 40px;
@@ -366,7 +422,6 @@ h2 {
   font-weight: 750;
 }
 
-.example-button,
 .secondary-button {
   border-color: var(--border);
   background: var(--surface-muted);
