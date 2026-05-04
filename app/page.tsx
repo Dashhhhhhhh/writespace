@@ -43,6 +43,20 @@ type StoredConversations = {
 const STORAGE_KEY = "nec-chat.messages.v1";
 const CONVERSATIONS_STORAGE_KEY = "nec-chat.conversations.v1";
 const DEFAULT_EDITION = "2023";
+const EXAMPLE_QUESTIONS = [
+  {
+    label: "Kitchen GFCI",
+    question: "Where are GFCI receptacles required in dwelling unit kitchens?",
+  },
+  {
+    label: "Service disconnects",
+    question: "What does the NEC require for service disconnect location?",
+  },
+  {
+    label: "Damp locations",
+    question: "Can NM cable be installed in a damp location?",
+  },
+];
 
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -202,7 +216,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
-  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const activeConversation =
@@ -406,6 +419,10 @@ export default function Home() {
     void sendMessage();
   }
 
+  function handleExample(question: string) {
+    setDraft(question);
+  }
+
   function handleNewChat() {
     const conversation = createConversation();
 
@@ -583,36 +600,10 @@ export default function Home() {
           </div>
         </header>
 
-        <div
-          className={`content-grid${
-            isHistoryCollapsed ? " content-grid-history-collapsed" : ""
-          }`}
-        >
-          <aside
-            className={`history-panel${
-              isHistoryCollapsed ? " history-panel-collapsed" : ""
-            }`}
-            aria-label="Saved chats"
-          >
+        <div className="content-grid">
+          <aside className="history-panel" aria-label="Saved chats">
             <div className="history-header">
-              <div className="history-title-row">
-                <span>Chats</span>
-                <button
-                  className="history-collapse-button"
-                  type="button"
-                  aria-label={
-                    isHistoryCollapsed ? "Expand saved chats" : "Collapse saved chats"
-                  }
-                  aria-expanded={!isHistoryCollapsed}
-                  onClick={() =>
-                    setIsHistoryCollapsed((currentCollapsed) => !currentCollapsed)
-                  }
-                >
-                  <span aria-hidden="true">
-                    {isHistoryCollapsed ? ">" : "<"}
-                  </span>
-                </button>
-              </div>
+              <span>Chats</span>
               <button
                 className="new-chat-button"
                 type="button"
@@ -622,7 +613,7 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="history-list" hidden={isHistoryCollapsed}>
+            <div className="history-list">
               {sortedConversations.map((conversation) => {
                 const isActive = conversation.id === activeConversationId;
 
@@ -660,7 +651,19 @@ export default function Home() {
                   <div className="empty-mark" aria-hidden="true">
                     70
                   </div>
-                  <h2>Ask the Code</h2>
+                  <h2>Ask NEC</h2>
+                  <div className="example-list" aria-label="Example questions">
+                    {EXAMPLE_QUESTIONS.map((example) => (
+                      <button
+                        className="example-button"
+                        key={example.label}
+                        type="button"
+                        onClick={() => handleExample(example.question)}
+                      >
+                        {example.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 messages.map((message) => (
