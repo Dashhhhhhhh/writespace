@@ -61,11 +61,11 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text: [
-                "Name a saved NEC chat.",
+                "Name a saved WHS code lookup chat.",
                 "Return only a very short, specific summary title with 2 to 4 words.",
                 "Use Title Case.",
                 "Do not use quotes, punctuation at the end, or generic titles like New Chat.",
-                "Prefer code-topic wording such as Kitchen GFCI, Service Disconnects, or NM Damp Locations.",
+                "Prefer code-topic wording such as Kitchen GFCI, Fire Alarm Devices, Grease Ducts, or Plumbing Vents.",
               ].join(" "),
             },
           ],

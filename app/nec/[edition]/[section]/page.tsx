@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getCodeDocument } from "../../../../lib/code-catalog";
 import { findNecSection, getNecEdition } from "../../../../lib/nec";
 
 type SectionPageProps = {
@@ -38,30 +39,27 @@ export default async function SectionPage({ params }: SectionPageProps) {
     notFound();
   }
 
-  const pdfUrl = `/nec-pdf/nec-${section.edition}.pdf#page=${section.page ?? 1}&search=${encodeURIComponent(section.section)}`;
+  const document = getCodeDocument(`nec-${section.edition}`);
+  const pdfPath = document?.pdfUrl ?? `/code-pdf/nec-${section.edition}.pdf`;
+  const pdfUrl = `${pdfPath}#page=${section.page ?? 1}&search=${encodeURIComponent(section.section)}`;
 
   return (
     <main className="section-shell">
       <article className="section-document">
-        <Link className="back-link" href="/">
-          Back to chat
-        </Link>
+        <header className="section-viewer-header">
+          <Link className="back-link" href="/">
+            Back to chat
+          </Link>
 
-        <p className="eyebrow">National Electrical Code reference</p>
-        <h1>
-          NEC {section.edition} {section.section}
-        </h1>
+          <div className="section-title-block">
+            <p className="eyebrow">National Electrical Code reference</p>
+            <h1>
+              NEC {section.edition} {section.section}
+            </h1>
 
-        {section.title ? <h2>{section.title}</h2> : null}
-
-        <div className="pdf-callout">
-          <strong>PDF view</strong>
-          <span>
-            Opened to page {section.page ?? "unknown"} and searching for section{" "}
-            {section.section}. The browser PDF viewer highlights the matching
-            section number when supported.
-          </span>
-        </div>
+            {section.title ? <h2>{section.title}</h2> : null}
+          </div>
+        </header>
 
         <iframe
           className="pdf-frame"
@@ -79,9 +77,9 @@ export default async function SectionPage({ params }: SectionPageProps) {
         <details className="section-text-fallback">
           <summary>Show extracted fallback text</summary>
           <div className="section-text">
-          {section.text.split(/\n{2,}/).map((paragraph, index) => (
-            <p key={`${section.section}-${index}`}>{paragraph}</p>
-          ))}
+            {section.text.split(/\n{2,}/).map((paragraph, index) => (
+              <p key={`${section.section}-${index}`}>{paragraph}</p>
+            ))}
           </div>
         </details>
 

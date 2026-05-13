@@ -10,10 +10,10 @@ const execFileAsync = promisify(execFile);
 const edition = process.env.NEC_EDITION?.trim() || "2023";
 const sourcePath = resolvePath(
   process.env.NEC_SOURCE_PATH?.trim() ||
-    `data/nec/source/nec-${edition}.txt`,
+    `data/code/source/nec-${edition}.txt`,
 );
 const outputPath = resolvePath(
-  process.env.NEC_INDEX_PATH?.trim() || `data/nec/index/nec-${edition}.json`,
+  process.env.NEC_INDEX_PATH?.trim() || `data/code/index/nec-${edition}.json`,
 );
 
 const pageMarkerPattern = /@@PDF_PAGE:(\d+)@@/g;

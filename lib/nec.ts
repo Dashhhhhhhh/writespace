@@ -47,7 +47,7 @@ export function getNecIndexPath(edition: string) {
   return path.join(
     /*turbopackIgnore: true*/ process.cwd(),
     "data",
-    "nec",
+    "code",
     "index",
     `nec-${edition}.json`,
   );

@@ -43,7 +43,8 @@ body {
 
 button,
 textarea,
-select {
+select,
+a {
   font: inherit;
 }
 
@@ -122,19 +123,6 @@ h2 {
   gap: 12px;
 }
 
-.brand-mark {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--surface-strong);
-  color: var(--surface);
-  font-size: 0.88rem;
-  font-weight: 860;
-}
-
 .brand-block > div:last-child {
   min-width: 0;
 }
@@ -158,22 +146,36 @@ h2 {
   gap: 8px;
 }
 
-.edition-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.edition-control select {
-  min-height: 36px;
-  padding: 0 30px 0 10px;
+.source-chip {
+  display: grid;
+  max-width: min(34vw, 280px);
+  min-height: 40px;
+  align-content: center;
+  gap: 1px;
   border: 1px solid var(--border);
   border-radius: 999px;
+  padding: 5px 12px;
   background: var(--surface);
+}
+
+.source-chip small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 820;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.source-chip strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .content-grid {
@@ -350,24 +352,39 @@ h2 {
 }
 
 .example-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+  display: grid;
+  width: min(720px, 100%);
+  justify-self: center;
+  gap: 8px;
 }
 
 .example-button,
 .secondary-button,
+.secondary-link,
 .primary-button {
+  display: inline-flex;
   min-height: 40px;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 0 14px;
   font-weight: 750;
+  text-decoration: none;
+}
+
+.example-button {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
 }
 
 .example-button,
-.secondary-button {
+.secondary-button,
+.secondary-link {
   border-color: var(--border);
   background: var(--surface-muted);
   color: var(--text);
@@ -469,7 +486,7 @@ h2 {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(170px, 250px) minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
   padding: 12px;
@@ -478,10 +495,38 @@ h2 {
   backdrop-filter: blur(14px);
 }
 
+.source-select-control {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.source-select-control span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 820;
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.source-select-control select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+  font-size: 0.9rem;
+  font-weight: 740;
+}
+
 .composer textarea {
   width: 100%;
   min-height: 48px;
-  max-height: 160px;
+  max-height: 94px;
   resize: none;
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -490,11 +535,13 @@ h2 {
   color: var(--text);
   outline: none;
   line-height: 1.35;
+  overflow-y: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 
 .composer textarea:focus,
-.edition-control select:focus {
+.source-select-control select:focus,
+.settings-row select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--focus-ring);
 }
@@ -518,48 +565,161 @@ h2 {
   border: 0;
 }
 
-.section-shell {
+.settings-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: clamp(12px, 2.2vw, 24px);
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+
+.settings-header,
+.settings-list {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--soft-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.settings-list {
+  display: grid;
+  overflow: hidden;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-row span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.settings-row strong,
+.settings-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-row strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.settings-row small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.settings-row select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+}
+
+.section-document-full-viewer {
+  grid-template-rows: auto minmax(560px, 1fr) auto;
+}
+
+.section-shell {
+  display: grid;
+  min-height: 100dvh;
+  padding: clamp(10px, 2vw, 20px);
   background: var(--bg);
 }
 
 .section-document {
-  max-width: 920px;
+  display: grid;
+  grid-template-rows: auto minmax(560px, 1fr) auto auto auto;
+  gap: 12px;
+  width: min(1280px, 100%);
+  min-height: calc(100dvh - clamp(20px, 4vw, 40px));
+  max-width: none;
   margin: 0 auto;
-  padding: 28px;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
 
+.section-viewer-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title-block {
+  min-width: 0;
+}
+
 .back-link {
   display: inline-flex;
-  margin-bottom: 22px;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface-muted);
   color: var(--accent-strong);
   font-weight: 760;
   text-decoration: none;
 }
 
 .back-link:hover {
-  text-decoration: underline;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .section-document h1 {
-  margin-bottom: 12px;
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 0.98;
+  margin-bottom: 6px;
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1.04;
 }
 
 .section-document h2 {
-  margin-bottom: 22px;
+  margin-bottom: 0;
   color: var(--muted);
-  font-size: 1.15rem;
+  font-size: 1rem;
   line-height: 1.45;
 }
 
 .section-note {
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid #e3c89e;
   border-radius: 6px;
@@ -568,29 +728,17 @@ h2 {
   line-height: 1.5;
 }
 
-.pdf-callout {
-  display: grid;
-  gap: 4px;
-  margin: 18px 0;
-  padding: 12px 14px;
-  border: 1px solid #a8d6ce;
-  border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  line-height: 1.45;
-}
-
 .pdf-frame {
   width: 100%;
-  height: min(78vh, 980px);
-  min-height: 620px;
+  height: 100%;
+  min-height: 560px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-muted);
 }
 
 .section-text-fallback {
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .section-text-fallback summary {
@@ -641,6 +789,14 @@ h2 {
     padding: 12px;
   }
 
+  .header-actions {
+    justify-content: flex-end;
+  }
+
+  .source-chip {
+    max-width: min(44vw, 220px);
+  }
+
   .eyebrow {
     display: none;
   }
@@ -675,6 +831,10 @@ h2 {
     padding: 10px;
   }
 
+  .source-select-control {
+    grid-column: 1 / -1;
+  }
+
   .composer .primary-button {
     width: auto;
     min-width: 64px;
@@ -685,11 +845,38 @@ h2 {
     width: min(92%, 780px);
   }
 
+  .settings-shell {
+    padding: 10px;
+  }
+
+  .settings-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 13px 12px;
+  }
+
   .section-shell {
-    padding: 14px;
+    padding: 10px;
   }
 
   .section-document {
-    padding: 20px;
+    grid-template-rows: auto minmax(520px, 72dvh) auto auto auto;
+    min-height: calc(100dvh - 20px);
+    padding: 10px;
+  }
+
+  .section-viewer-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pdf-frame {
+    min-height: 520px;
   }
 }

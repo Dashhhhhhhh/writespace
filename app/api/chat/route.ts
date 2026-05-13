@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import {
-  getNecEdition,
-  buildNecSectionUrl,
-  loadNecSections,
-  retrieveNecSections,
-  type NecCitation,
-} from "../../../lib/nec";
+  getCodeDocument,
+  getCodeDocumentLabel,
+} from "../../../lib/code-catalog";
+import {
+  loadCodeChunks,
+  retrieveCodeChunks,
+  toCodeCitation,
+  type CodeCitation,
+} from "../../../lib/code-index";
 
 export const runtime = "nodejs";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = "gpt-4.1";
+const DEFAULT_MODEL = "gpt-4.1-mini";
 
 type ChatMessage = {
   role?: unknown;
@@ -19,7 +22,7 @@ type ChatMessage = {
 
 type ChatRequest = {
   messages?: unknown;
-  edition?: unknown;
+  documentId?: unknown;
 };
 
 type ChatAnswer = {
@@ -53,47 +56,57 @@ export async function POST(request: Request) {
 
   if (!latestQuestion) {
     return NextResponse.json(
-      { error: "Ask a NEC question before sending chat." },
+      { error: "Ask a code question before sending chat." },
       { status: 400 },
     );
   }
 
-  const edition = getNecEdition(
-    typeof body.edition === "string" ? body.edition : undefined,
-  );
+  const requestedDocumentId =
+    typeof body.documentId === "string" ? body.documentId.trim() : "";
+  const selectedDocument = requestedDocumentId
+    ? getCodeDocument(requestedDocumentId)
+    : null;
+
+  if (!selectedDocument) {
+    return NextResponse.json(
+      { error: "Select a source file before asking." },
+      { status: 400 },
+    );
+  }
 
   let matches;
 
   try {
-    const sections = await loadNecSections(edition);
-    matches = retrieveNecSections(sections, latestQuestion);
+    const chunks = await loadCodeChunks(selectedDocument);
+    matches = retrieveCodeChunks(chunks, latestQuestion);
   } catch (error) {
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
-            : "Unable to load the NEC retrieval index.",
+            : "Unable to load the WHS code retrieval indexes.",
       },
       { status: 503 },
     );
   }
 
+  const responseDocument = {
+    id: selectedDocument.id,
+    label: getCodeDocumentLabel(selectedDocument),
+    codeLabel: selectedDocument.codeLabel,
+    edition: selectedDocument.edition,
+  };
+
   if (matches.length === 0) {
     return NextResponse.json({
-      answer:
-        "I do not have enough relevant NEC context in the licensed index to answer that. Ask with a specific section, article, equipment type, location, voltage, occupancy, and installation condition.",
+      answer: `I searched ${responseDocument.label}, but I do not have enough relevant context in that file to answer. Ask with a specific section, system, occupancy, location, and installation condition.`,
       citations: [],
+      document: responseDocument,
     });
   }
 
-  const allowedCitations = matches.map(({ edition, section, title, page }) => ({
-    edition,
-    section,
-    title,
-    page,
-    url: buildNecSectionUrl({ edition, section }),
-  }));
+  const allowedCitations = matches.map(toCodeCitation);
 
   const openAiResponse = await fetch(OPENAI_RESPONSES_URL, {
     method: "POST",
@@ -103,7 +116,7 @@ export async function POST(request: Request) {
     },
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL,
-      max_output_tokens: 900,
+      max_output_tokens: 500,
       input: [
         {
           role: "system",
@@ -111,12 +124,16 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text: [
-                "You answer questions about NFPA 70, the National Electrical Code.",
-                "Use only the retrieved NEC context provided by the server.",
-                "Every substantive answer must cite exact NEC sections from the provided context, using the edition and section number.",
-                "Do not cite sections that are not in the provided context.",
+                "You answer questions about WHS code documents.",
+                "Use only the retrieved context from the selected source file provided by the server.",
+                "This chat is locked to one source file; do not blend requirements from other codes or editions.",
+                "Every substantive answer must cite exact locators from the provided context, using the code label, edition, and locator.",
+                "If the retrieved context supports an answer, include at least one citation object for the exact locator that supports it.",
+                "Do not cite source files or locators that are not in the provided context.",
                 "If the provided context does not support an answer, say that clearly and ask for the missing details.",
-                "Mention when the answer may depend on local amendments, AHJ interpretation, listing instructions, equipment labeling, occupancy, voltage, wiring method, or installation conditions.",
+                "Keep the answer concise: usually 2 to 4 short sentences, or up to 4 bullets only when it improves clarity.",
+                "Do not restate the user's question, add introductions, or include broad background.",
+                "Mention dependencies like local amendments, AHJ interpretation, listing instructions, equipment labeling, occupancy, voltage, wiring method, or installation conditions only when directly relevant.",
                 "Summarize requirements in your own words. Do not quote long excerpts.",
                 "This is technical code assistance, not legal advice.",
               ].join(" "),
@@ -129,24 +146,26 @@ export async function POST(request: Request) {
             {
               type: "input_text",
               text: [
-                `Requested NEC edition: ${edition}`,
+                `Selected source file: ${responseDocument.label}`,
                 "Conversation:",
                 messages
                   .slice(-8)
                   .map((message) => `${message.role}: ${message.content}`)
                   .join("\n"),
                 "",
-                "Retrieved NEC context:",
+                "Retrieved context:",
                 matches
                   .map((match, index) =>
                     [
-                      `[${index + 1}] NEC ${match.edition} ${match.section}${match.title ? ` - ${match.title}` : ""}`,
+                      `[${index + 1}] ${match.documentLabel} ${match.locator}${
+                        match.title ? ` - ${match.title}` : ""
+                      }${match.page ? ` (PDF page ${match.page})` : ""}`,
                       match.snippet,
                     ].join("\n"),
                   )
                   .join("\n\n"),
                 "",
-                "Return a direct answer and the citations you used.",
+                "Return a concise direct answer and the citations you used. If you answer the question, citations must not be empty.",
               ].join("\n"),
             },
           ],
@@ -155,7 +174,7 @@ export async function POST(request: Request) {
       text: {
         format: {
           type: "json_schema",
-          name: "nec_chat_answer",
+          name: "whs_code_chat_answer",
           strict: true,
           schema: {
             type: "object",
@@ -164,21 +183,21 @@ export async function POST(request: Request) {
               answer: {
                 type: "string",
                 description:
-                  "The NEC answer, summarized in original wording, including section references in prose.",
+                  "The code answer, summarized in original wording, including source locators in prose.",
               },
               citations: {
                 type: "array",
                 description:
-                  "Only the retrieved NEC sections actually used to answer.",
+                  "Only the retrieved source locators actually used to answer.",
                 items: {
                   type: "object",
                   additionalProperties: false,
                   properties: {
-                    edition: { type: "string" },
-                    section: { type: "string" },
+                    documentId: { type: "string" },
+                    locator: { type: "string" },
                     title: { type: "string" },
                   },
-                  required: ["edition", "section", "title"],
+                  required: ["documentId", "locator", "title"],
                 },
               },
             },
@@ -249,7 +268,7 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ answer, citations });
+  return NextResponse.json({ answer, citations, document: responseDocument });
 }
 
 function normalizeMessages(value: unknown) {
@@ -271,17 +290,17 @@ function normalizeMessages(value: unknown) {
 
 function normalizeCitations(
   value: unknown,
-  allowedCitations: NecCitation[],
+  allowedCitations: CodeCitation[],
   answer: string,
 ) {
   const allowed = new Map(
     allowedCitations.map((citation) => [
-      `${citation.edition}:${citation.section}`.toLowerCase(),
+      `${citation.documentId}:${citation.locator}`.toLowerCase(),
       citation,
     ]),
   );
   const seen = new Set<string>();
-  const citations: NecCitation[] = [];
+  const citations: CodeCitation[] = [];
 
   if (Array.isArray(value)) {
     value.forEach((citation) => {
@@ -290,27 +309,35 @@ function normalizeCitations(
       }
 
       const candidate = citation as Record<string, unknown>;
-      const edition = String(candidate.edition ?? "").trim();
-      const section = String(candidate.section ?? "").trim();
-      addCitation(edition, section);
+      const documentId = String(candidate.documentId ?? "").trim();
+      const locator = String(candidate.locator ?? "").trim();
+      addCitation(documentId, locator);
     });
   }
 
-  allowedCitations.forEach((citation) => {
-    const sectionPattern = new RegExp(
-      `\\b${escapeRegExp(citation.section)}(?:\\([A-Za-z0-9]+\\))*\\b`,
-      "i",
-    );
+  const normalizedAnswer = answer.toLowerCase();
 
-    if (sectionPattern.test(answer)) {
-      addCitation(citation.edition, citation.section);
+  allowedCitations.forEach((citation) => {
+    if (
+      normalizedAnswer.includes(citation.locator.toLowerCase()) ||
+      (citation.section &&
+        normalizedAnswer.includes(citation.section.toLowerCase()))
+    ) {
+      addCitation(citation.documentId, citation.locator);
     }
   });
 
+  if (citations.length === 0 && !isUnsupportedAnswer(answer)) {
+    addCitation(
+      allowedCitations[0]?.documentId ?? "",
+      allowedCitations[0]?.locator ?? "",
+    );
+  }
+
   return citations;
 
-  function addCitation(edition: string, section: string) {
-    const key = `${edition}:${section}`.toLowerCase();
+  function addCitation(documentId: string, locator: string) {
+    const key = `${documentId}:${locator}`.toLowerCase();
     const allowedCitation = allowed.get(key);
 
     if (!allowedCitation || seen.has(key)) {
@@ -322,6 +349,14 @@ function normalizeCitations(
   }
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function isUnsupportedAnswer(answer: string) {
+  const normalizedAnswer = answer.toLowerCase();
+
+  return (
+    normalizedAnswer.includes("do not have enough") ||
+    normalizedAnswer.includes("does not provide enough") ||
+    normalizedAnswer.includes("not enough relevant context") ||
+    normalizedAnswer.includes("provided context does not support") ||
+    normalizedAnswer.includes("ask for the missing details")
+  );
 }

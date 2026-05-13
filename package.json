@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "index:codes": "node scripts/build-code-index.mjs",
     "index:nec": "node scripts/build-nec-index.mjs"
   },
   "dependencies": {

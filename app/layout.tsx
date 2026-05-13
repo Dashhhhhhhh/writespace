@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NEC",
+  title: "WHS Code Lookup",
   description:
-    "A National Electrical Code assistant that answers from a licensed NEC index and cites sections.",
+    "A code lookup assistant that answers from selected WHS source indexes and cites the matching file.",
 };
 
 export default function RootLayout({
